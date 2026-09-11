@@ -1,0 +1,4 @@
+interface:
+  display_name: "CadKit"
+  short_description: "CAD modelling, live inspection and fabrication"
+  default_prompt: "Use $cadkit to work with me on this CAD project and inspect my selection in the open app."

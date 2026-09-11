@@ -1,0 +1,1064 @@
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { flushSync } from "react-dom";
+import {
+  Box,
+  Boxes,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  Download,
+  Eye,
+  EyeOff,
+  Layers3,
+  Moon,
+  RefreshCw,
+  Ruler,
+  Search,
+  Sun,
+  X,
+  Crosshair,
+  Plug,
+  Printer,
+  MessageSquare,
+  Plus,
+} from "lucide-react";
+import "three-cad-viewer/css";
+import "./style.css";
+import { Viewport } from "./Viewport";
+import { SlicerPanel } from "./SlicerPanel";
+import { AnnotationCard, AnnotationMarkdown } from "./AnnotationCard";
+import { AnnotationEditor } from "./AnnotationEditor";
+import { annotationNodes } from "./annotations";
+import { initialVisibility, isIsolated, visibilityReducer } from "./visibility";
+import type {
+  Component,
+  Measurement,
+  Snapshot,
+  Status,
+  Theme,
+  TreeNode,
+  Annotation,
+  ViewportApi,
+} from "./types";
+
+const title = (value: string) =>
+  value
+    .split("-")
+    .map((word) =>
+      word === "zp6" ? "ZP6" : word[0]?.toUpperCase() + word.slice(1),
+    )
+    .join(" ");
+const mm = (value: number) =>
+  value.toLocaleString("en-GB", {
+    maximumFractionDigits: 3,
+    minimumFractionDigits: 3,
+  });
+const leaves = (node: TreeNode): Component[] =>
+  node.kind === "component" ? [node] : node.children.flatMap(leaves);
+function storedTheme(): Theme {
+  try {
+    return localStorage.getItem("cadkit.theme") === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function App() {
+  const [scene, setScene] = useState<Snapshot | null>(null);
+  const [status, setStatus] = useState<Status>({
+    phase: "building",
+    message: "Starting CadQuery…",
+  });
+  const [theme, setTheme] = useState<Theme>(storedTheme);
+  const [tab, setTab] = useState<"assembly" | "parts">("assembly");
+  const [search, setSearch] = useState("");
+  const [visibility, dispatchVisibility] = useReducer(
+    visibilityReducer,
+    initialVisibility,
+  );
+  const { hidden, isolation } = visibility;
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<string[]>([]);
+  const [partName, setPartName] = useState<string | null>(null);
+  const [measurement, setMeasurement] = useState<Measurement | null>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const [measureError, setMeasureError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
+    null,
+  );
+  const [noteRows, setNoteRows] = useState<Set<string>>(new Set());
+  const nodes = useMemo(
+    () => (scene ? annotationNodes(scene.tree) : new Map<string, TreeNode>()),
+    [scene],
+  );
+  const [highlights, setHighlights] = useState({
+    ids: [] as string[],
+    color: "#f1c789",
+  });
+  const [printParts, setPrintParts] = useState<string[] | null>(null);
+  const viewportApi = useRef<ViewportApi | null>(null);
+  const forcedMeasurement = useRef<Measurement | null>(null);
+  const controlHandler = useRef<
+    (request: { method: string; params: any }) => Promise<unknown>
+  >(async () => {
+    throw new Error("View is loading");
+  });
+  const currentRevision = useRef("");
+  const measureSequence = useRef(0);
+
+  const acceptScene = (next: Snapshot) => {
+    if (currentRevision.current === next.revision) return;
+    currentRevision.current = next.revision;
+    setScene(next);
+    const ids = new Set(next.components.map((c) => c.id));
+    dispatchVisibility({ type: "reconcile", ids: [...ids] });
+    setSelected((before) => before.filter((id) => ids.has(id)));
+    setMeasurement(null);
+    const nextNodes = annotationNodes(next.tree);
+    const canFollow = (a: Annotation) =>
+      Boolean(a.target && nextNodes.has(a.target) && !a.point && !a.from);
+    setAnnotations((before) => before.filter(canFollow));
+    setEditingAnnotation((before) =>
+      before && canFollow(before) ? before : null,
+    );
+    setNoteRows(
+      (before) => new Set([...before].filter((id) => nextNodes.has(id))),
+    );
+    setHighlights({ ids: [], color: "#f1c789" });
+    forcedMeasurement.current = null;
+  };
+  useEffect(() => {
+    const off = window.cadkit.onEvent((event) => {
+      if (event.type === "scene") acceptScene(event.scene);
+      if (event.type === "status") setStatus(event);
+    });
+    window.cadkit
+      .load()
+      .then((result) => {
+        acceptScene(result.scene);
+        setStatus(result.status);
+      })
+      .catch((error) => setStatus({ phase: "error", message: error.message }));
+    return off;
+  }, []);
+  useEffect(
+    () => window.cadkit.onControl((request) => controlHandler.current(request)),
+    [],
+  );
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("cadkit.theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const sequence = ++measureSequence.current;
+    setMeasurement(null);
+    setMeasureError("");
+    if (!scene || selected.length !== 2) {
+      setMeasuring(false);
+      return;
+    }
+    if (
+      forcedMeasurement.current?.revision === scene.revision &&
+      forcedMeasurement.current.ids.join() === selected.join()
+    ) {
+      setMeasurement(forcedMeasurement.current);
+      forcedMeasurement.current = null;
+      setMeasuring(false);
+      return;
+    }
+    setMeasuring(true);
+    window.cadkit
+      .measure({ revision: scene.revision, ids: selected })
+      .then((result) => {
+        if (
+          sequence === measureSequence.current &&
+          result.revision === currentRevision.current
+        )
+          setMeasurement(result);
+      })
+      .catch((error) => {
+        if (sequence === measureSequence.current)
+          setMeasureError(error.message);
+      })
+      .finally(() => {
+        if (sequence === measureSequence.current) setMeasuring(false);
+      });
+  }, [selected, scene?.revision]);
+
+  const pick = (id: string, multiple = false) => {
+    setPartName(null);
+    setSelected((before) =>
+      multiple
+        ? before.includes(id)
+          ? before.filter((item) => item !== id)
+          : [...before.slice(-1), id]
+        : [id],
+    );
+  };
+  const chosen = scene?.components.find(
+    (c) => c.id === selected[selected.length - 1],
+  );
+  const part = scene?.project.parts.find(
+    (p) => p.name === (partName ?? chosen?.part),
+  );
+  const toggleVisibility = (node: TreeNode) => {
+    dispatchVisibility({ type: "toggle", ids: leaves(node).map((c) => c.id) });
+  };
+  const isolate = (ids: string[]) => {
+    dispatchVisibility({ type: "isolate", ids });
+  };
+  const rebuild = () => {
+    void window.cadkit
+      .rebuild()
+      .catch((error) => setStatus({ phase: "error", message: error.message }));
+  };
+  const toggleCollapsed = (id: string) =>
+    setCollapsed((before) => {
+      const next = new Set(before);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const exportPart = async () => {
+    if (!part) return;
+    setExporting(true);
+    try {
+      if (await window.cadkit.exportPart(part.name))
+        setNotice(`Exported ${title(part.name)}`);
+    } catch (error) {
+      setNotice(String(error));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const uiState = () => ({
+    revision: scene?.revision,
+    theme,
+    selected,
+    selectedPart: part ?? null,
+    selectedComponents:
+      scene?.components.filter((c) => selected.includes(c.id)) ?? [],
+    hidden: [...hidden],
+    isolation: isolation
+      ? {
+          ids: [...isolation.ids],
+          previousHidden: [...isolation.previousHidden],
+        }
+      : null,
+    highlights,
+    annotations,
+    measurement,
+    measuring,
+    measureError,
+    camera: viewportApi.current?.camera() ?? null,
+    viewport: viewportApi.current?.rectangle() ?? null,
+  });
+  controlHandler.current = async ({ method, params }) => {
+    if (!scene) throw new Error("Build a project first");
+    if (params.revision && params.revision !== scene.revision)
+      throw new Error("Stale view revision; read get_state again");
+    const nodes = new Map<string, TreeNode>();
+    const visit = (node: TreeNode) => {
+      nodes.set(node.id, node);
+      if (node.kind === "assembly") node.children.forEach(visit);
+    };
+    visit(scene.tree);
+    const expand = (ids: string[], componentsOnly = false) => [
+      ...new Set(
+        ids.flatMap((id) => {
+          const node = nodes.get(id);
+          if (!node || (componentsOnly && node.kind !== "component"))
+            throw new Error(
+              `Unknown component${componentsOnly ? "" : " or assembly"}: ${id}`,
+            );
+          return leaves(node).map((c) => c.id);
+        }),
+      ),
+    ];
+    if (method === "get_state") return uiState();
+    if (method === "inspect") {
+      if (
+        params.part &&
+        !scene.project.parts.some((p) => p.name === params.part)
+      )
+        throw new Error(`Unknown Part: ${params.part}`);
+      const ids = params.ids
+        ? expand(params.ids)
+        : params.part
+          ? scene.components
+              .filter((c) => c.part === params.part)
+              .map((c) => c.id)
+          : selected;
+      const components = scene.components.filter((c) => ids.includes(c.id));
+      const partNames = new Set([
+        ...components.map((c) => c.part),
+        params.part ?? part?.name,
+      ]);
+      return {
+        revision: scene.revision,
+        components,
+        parts: scene.project.parts.filter((p) => partNames.has(p.name)),
+        measurement,
+        annotations: annotations.filter(
+          (a) => a.target && [...ids, ...(params.ids ?? [])].includes(a.target),
+        ),
+      };
+    }
+    if (method === "select") {
+      if (
+        params.part &&
+        !scene.project.parts.some((p) => p.name === params.part)
+      )
+        throw new Error(`Unknown Part: ${params.part}`);
+      const ids = params.part
+        ? scene.components
+            .filter((c) => c.part === params.part)
+            .slice(0, 1)
+            .map((c) => c.id)
+        : expand(params.ids ?? [], true);
+      flushSync(() => {
+        setSelected(ids);
+        setPartName(params.part ?? null);
+      });
+    } else if (method === "visibility") {
+      if (!params.ids.length && params.action !== "show")
+        throw new Error("Choose IDs to hide or isolate");
+      const ids = params.ids.length
+        ? expand(params.ids)
+        : scene.components.map((c) => c.id);
+      flushSync(() => {
+        if (params.action === "isolate") isolate(ids);
+        else if (params.action === "show" && !params.ids.length)
+          dispatchVisibility({ type: "showAll" });
+        else dispatchVisibility({ type: params.action, ids });
+      });
+    } else if (method === "highlight") {
+      const ids = expand(params.ids);
+      flushSync(() => setHighlights({ ids, color: params.color }));
+    } else if (method === "camera") {
+      if (!viewportApi.current) throw new Error("Viewport is loading");
+      viewportApi.current.camera(params);
+    } else if (method === "show_measurement") {
+      expand(params.ids, true);
+      forcedMeasurement.current = params;
+      flushSync(() => {
+        setPartName(null);
+        setSelected([...params.ids]);
+        setMeasurement(params);
+        dispatchVisibility({ type: "show", ids: params.ids });
+      });
+    } else if (method === "annotate") {
+      if (
+        annotations.length >= 100 &&
+        !annotations.some((a) => a.id === params.id)
+      )
+        throw new Error("Limit of 100 annotations; clear some first");
+      if (params.target && !nodes.has(params.target))
+        throw new Error(`Unknown annotation target: ${params.target}`);
+      const { revision: _, ...annotation } = params;
+      flushSync(() =>
+        setAnnotations((before) => [
+          ...before.filter((a) => a.id !== annotation.id),
+          annotation,
+        ]),
+      );
+    } else if (method === "clear_annotations") {
+      flushSync(() =>
+        setAnnotations((before) =>
+          params.id ? before.filter((a) => a.id !== params.id) : [],
+        ),
+      );
+    } else throw new Error(`Unknown view operation: ${method}`);
+    // Wait for React, viewer effects and the compositor before acknowledging.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    return controlHandler.current({ method: "get_state", params: {} });
+  };
+
+  const addNote = (target: string) => {
+    if (annotations.length >= 100) {
+      setNotice("Limit of 100 annotations; clear some first");
+      return;
+    }
+    setEditingAnnotation({
+      id: crypto.randomUUID(),
+      target,
+      text: "",
+      space: "world",
+      color: "#a2dec5",
+    });
+  };
+  const deleteNote = (id: string) =>
+    setAnnotations((before) => before.filter((a) => a.id !== id));
+  const moveNote = (id: string, offset: [number, number]) =>
+    setAnnotations((before) =>
+      before.map((a) => (a.id === id ? { ...a, offset } : a)),
+    );
+  const saveNote = (annotation: Annotation) => {
+    setAnnotations((before) => [
+      ...before.filter((a) => a.id !== annotation.id),
+      annotation,
+    ]);
+    if (annotation.target)
+      setNoteRows((before) => new Set([...before, annotation.target!]));
+    setEditingAnnotation(null);
+  };
+
+  function tree(node: TreeNode, depth = 0): React.ReactNode {
+    const childIds = leaves(node).map((c) => c.id);
+    if (
+      search &&
+      !leaves(node).some((c) =>
+        `${c.name} ${c.part ?? ""} ${c.material}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ) &&
+      !node.name.includes(search.toLowerCase())
+    )
+      return null;
+    const allHidden = childIds.every((id) => hidden.has(id));
+    const isAssembly = node.kind === "assembly";
+    const isCollapsed = collapsed.has(node.id) && !search;
+    const notes = annotations.filter((a) => a.target === node.id);
+    const notesOpen = noteRows.has(node.id);
+    return (
+      <div key={node.id} className="tree-node">
+        <div
+          className={`tree-row ${selected.includes(node.id) ? "selected" : ""} ${allHidden ? "hidden-object" : ""}`}
+          style={{ paddingLeft: 10 + depth * 15 }}
+          data-node-id={node.id}
+        >
+          {isAssembly ? (
+            <button
+              className="chevron"
+              aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${node.name}`}
+              onClick={() => toggleCollapsed(node.id)}
+            >
+              {isCollapsed ? (
+                <ChevronRight size={13} />
+              ) : (
+                <ChevronDown size={13} />
+              )}
+            </button>
+          ) : (
+            <span className="tree-indent" />
+          )}
+          <button
+            className="tree-label"
+            title={node.name}
+            aria-label={`Select ${node.name}`}
+            onClick={(event) =>
+              isAssembly
+                ? toggleCollapsed(node.id)
+                : pick(
+                    node.id,
+                    event.shiftKey || event.ctrlKey || event.metaKey,
+                  )
+            }
+          >
+            {isAssembly ? (
+              <Boxes size={15} />
+            ) : (
+              <Box
+                size={14}
+                style={{ color: node.part ? "var(--accent)" : "var(--muted)" }}
+              />
+            )}
+            <span>{title(node.name)}</span>
+            {isAssembly && <small>{childIds.length}</small>}
+          </button>
+          <button
+            className={`tree-note ${notes.length ? "has-notes" : ""}`}
+            title={notes.length ? `${notes.length} notes` : "Add note"}
+            aria-label={
+              notes.length ? `Notes for ${node.name}` : `Annotate ${node.name}`
+            }
+            aria-expanded={notes.length ? notesOpen : undefined}
+            onClick={() => {
+              if (!notes.length) addNote(node.id);
+              else
+                setNoteRows((before) => {
+                  const next = new Set(before);
+                  next.has(node.id) ? next.delete(node.id) : next.add(node.id);
+                  return next;
+                });
+            }}
+          >
+            <MessageSquare size={13} />
+            {notes.length > 0 && <small>{notes.length}</small>}
+          </button>
+          <button
+            className="tree-isolate"
+            title={
+              isIsolated(visibility, childIds)
+                ? "Restore visibility"
+                : `Isolate ${title(node.name)}`
+            }
+            aria-label={`Isolate ${node.name}`}
+            aria-pressed={isIsolated(visibility, childIds)}
+            onClick={() => isolate(childIds)}
+          >
+            <Crosshair size={13} />
+          </button>
+          <button
+            className="visibility"
+            title={allHidden ? "Show" : "Hide"}
+            aria-label={`${allHidden ? "Show" : "Hide"} ${node.name}`}
+            aria-pressed={!allHidden}
+            onClick={() => toggleVisibility(node)}
+          >
+            {allHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+        {notesOpen && notes.length > 0 && (
+          <div
+            className="tree-notes"
+            data-notes-for={node.id}
+            style={{ marginLeft: 20 + depth * 15 }}
+          >
+            {notes.map((a) => (
+              <AnnotationCard
+                key={a.id}
+                compact
+                annotation={a}
+                onEdit={() => setEditingAnnotation(a)}
+                onDelete={() => deleteNote(a.id)}
+              />
+            ))}
+            <button
+              className="add-tree-note"
+              title="Add note"
+              aria-label={`Add note to ${node.name}`}
+              onClick={() => addNote(node.id)}
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+        )}
+        {isAssembly &&
+          !isCollapsed &&
+          node.children.map((child) => tree(child, depth + 1))}
+      </div>
+    );
+  }
+
+  const groups = useMemo(
+    () => [...new Set(scene?.project.parts.map((p) => p.group) ?? [])],
+    [scene],
+  );
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand">
+          <span className="brand-mark">
+            <Boxes size={22} />
+          </span>
+          <strong>cadkit</strong>
+        </div>
+        <div className="project-breadcrumb">
+          <span>/</span>
+          <Box size={15} />
+          {title(scene?.project.name ?? "Project")}
+        </div>
+        <div className="header-actions">
+          <span className="watch-label" title="Watching source">
+            <span className="live-dot" />
+          </span>
+          <button
+            className="icon-button"
+            title="Copy MCP connection config"
+            aria-label="Copy MCP connection config"
+            onClick={() =>
+              void window.cadkit
+                .copyMcpConfig()
+                .then(() => setNotice("MCP config copied"))
+            }
+          >
+            <Plug size={17} />
+          </button>
+          <button
+            className="icon-button"
+            title="Print"
+            aria-label="Print"
+            disabled={!scene}
+            onClick={() =>
+              setPrintParts(
+                scene?.project.parts
+                  .filter((p) => p.production && p.quantity > 0)
+                  .map((p) => p.name) ?? [],
+              )
+            }
+          >
+            <Printer size={17} />
+          </button>
+          <button
+            className="quiet-button"
+            disabled={status.phase === "building"}
+            onClick={rebuild}
+          >
+            <RefreshCw
+              size={15}
+              className={status.phase === "building" ? "spin" : ""}
+            />{" "}
+            Rebuild
+          </button>
+          <button
+            className="icon-button theme-button"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+        </div>
+      </header>
+      <div className="workspace">
+        <aside className="navigator">
+          <div className="panel-heading">
+            <span>PROJECT</span>
+            <span className="count-badge">
+              {scene?.components.length ?? "—"} objects
+            </span>
+          </div>
+          <div className="tabs">
+            <button
+              className={tab === "assembly" ? "active" : ""}
+              onClick={() => setTab("assembly")}
+            >
+              <Layers3 size={15} />
+              Assembly
+            </button>
+            <button
+              className={tab === "parts" ? "active" : ""}
+              onClick={() => setTab("parts")}
+            >
+              <Box size={15} />
+              Parts <small>{scene?.project.parts.length ?? 0}</small>
+            </button>
+          </div>
+          <div className="search">
+            <Search size={14} />
+            <input
+              aria-label="Search objects and parts"
+              placeholder="Search…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <kbd>⌕</kbd>
+          </div>
+          <div className="navigation-content">
+            {scene && tab === "assembly" && tree(scene.tree)}
+            {scene &&
+              tab === "parts" &&
+              groups.map((group) => (
+                <section className="parts-group" key={group}>
+                  <h3>{title(group)}</h3>
+                  {scene.project.parts
+                    .filter(
+                      (p) =>
+                        p.group === group &&
+                        `${p.name} ${p.material}`
+                          .toLowerCase()
+                          .includes(search.toLowerCase()),
+                    )
+                    .map((p) => (
+                      <button
+                        className={`part-row ${part?.name === p.name ? "active" : ""}`}
+                        key={p.name}
+                        onClick={() => {
+                          setPartName(p.name);
+                          setSelected(
+                            scene.components
+                              .filter((c) => c.part === p.name)
+                              .map((c) => c.id)
+                              .slice(0, 1),
+                          );
+                        }}
+                      >
+                        <Box size={15} />
+                        <span>
+                          {title(p.name)}
+                          <small>
+                            {p.material} ·{" "}
+                            {p.production ? "Production" : "Optional"}
+                          </small>
+                        </span>
+                        <em>×{p.quantity}</em>
+                      </button>
+                    ))}
+                </section>
+              ))}
+            {!scene && (
+              <div className="navigation-empty">
+                <Boxes size={25} />
+              </div>
+            )}
+          </div>
+          <div className="navigator-footer">
+            <span>
+              {scene ? scene.components.length - hidden.size : 0} visible
+            </span>
+            <button onClick={() => dispatchVisibility({ type: "showAll" })}>
+              Show all <Eye size={13} />
+            </button>
+          </div>
+        </aside>
+        <main className="canvas-panel">
+          {scene ? (
+            <Viewport
+              scene={scene}
+              theme={theme}
+              hidden={hidden}
+              selected={selected}
+              measurement={measurement}
+              annotations={annotations}
+              highlights={highlights}
+              api={viewportApi}
+              onClearAnnotations={() => setAnnotations([])}
+              onEditAnnotation={setEditingAnnotation}
+              onDeleteAnnotation={deleteNote}
+              onMoveAnnotation={moveNote}
+              onPick={pick}
+              onError={setNotice}
+            />
+          ) : (
+            <div className="loading-scene">
+              <div className="loading-logo">
+                <Boxes size={40} />
+              </div>
+              <h1>{status.phase === "error" ? "Build failed" : "Building…"}</h1>
+              <p>{status.message}</p>
+              {status.phase === "error" && (
+                <button className="primary-button" onClick={rebuild}>
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+          {scene && status.phase === "building" && (
+            <div className="build-toast">
+              <RefreshCw size={14} className="spin" />
+              {status.message}
+            </div>
+          )}
+          {status.phase === "error" && scene && (
+            <div className="error-banner">
+              <strong>Build failed · showing the last successful model</strong>
+              <p>{status.message}</p>
+              <button onClick={rebuild}>Retry</button>
+            </div>
+          )}
+          {notice && (
+            <div className="notice">
+              {notice}
+              <button aria-label="Dismiss notice" onClick={() => setNotice("")}>
+                <X size={15} />
+              </button>
+            </div>
+          )}
+        </main>
+        <aside className="inspector">
+          <div className="panel-heading">
+            <span>INSPECTOR</span>
+            {chosen && (
+              <button
+                title="Add note"
+                aria-label={`Annotate selected ${chosen.name}`}
+                onClick={() => addNote(chosen.id)}
+              >
+                <MessageSquare size={15} />
+              </button>
+            )}
+            {selected.length > 0 && (
+              <button
+                aria-label="Clear selection"
+                onClick={() => {
+                  setSelected([]);
+                  setPartName(null);
+                }}
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+          <div className="inspector-content">
+            {selected.length === 2 ? (
+              <div className="object-heading">
+                <span className="object-icon">
+                  <Ruler size={23} />
+                </span>
+                <h1>Clearance</h1>
+                <button
+                  className="quiet-button full-width isolate-button"
+                  aria-pressed={isIsolated(visibility, selected)}
+                  title={
+                    isIsolated(visibility, selected)
+                      ? "Restore visibility"
+                      : "Isolate pair"
+                  }
+                  onClick={() => isolate(selected)}
+                >
+                  <Crosshair size={14} />
+                  Isolate pair
+                </button>
+              </div>
+            ) : chosen || part ? (
+              <>
+                <div className="object-heading">
+                  <span className="object-icon">
+                    <Box size={23} />
+                  </span>
+                  <span className="eyebrow">
+                    {part ? "CADKIT PART" : "ASSEMBLY OBJECT"}
+                  </span>
+                  <h1 title={part?.description}>
+                    {title(part?.name ?? chosen!.name)}
+                  </h1>
+                </div>
+                <div className="tag-row">
+                  <span>{part?.material ?? chosen?.material}</span>
+                  <span>
+                    {chosen?.geometry === "mesh"
+                      ? "Mesh"
+                      : chosen
+                        ? "Native CAD"
+                        : "Part definition"}
+                  </span>
+                </div>
+                {part && (
+                  <section className="detail-section">
+                    <h2>Manufacturing</h2>
+                    <dl>
+                      <dt>Quantity</dt>
+                      <dd>{part.quantity}</dd>
+                      <dt>Group</dt>
+                      <dd>{title(part.group)}</dd>
+                      <dt>Print rotation</dt>
+                      <dd>{part.print_rotation.join("°, ")}°</dd>
+                      <dt>Use</dt>
+                      <dd>
+                        {part.production ? "Production" : "Optional / coupon"}
+                      </dd>
+                    </dl>
+                    {part.notes && (
+                      <details className="part-notes">
+                        <summary>Notes</summary>
+                        <div className="annotation-markdown">
+                          <AnnotationMarkdown text={part.notes} />
+                        </div>
+                      </details>
+                    )}
+                    <div className="part-actions">
+                      <button
+                        className="export-button"
+                        title="Export STL and native STEP in print orientation"
+                        disabled={exporting}
+                        onClick={() => void exportPart()}
+                      >
+                        <Download size={15} />
+                        {exporting ? "Exporting…" : "Export…"}
+                      </button>
+                      <button
+                        className="export-button"
+                        onClick={() => setPrintParts([part.name])}
+                      >
+                        <Printer size={15} />
+                        Print…
+                      </button>
+                    </div>
+                  </section>
+                )}
+                {chosen && (
+                  <section className="detail-section">
+                    <h2>
+                      Installed bounds <span>mm</span>
+                    </h2>
+                    <div className="dimension-grid">
+                      {["X", "Y", "Z"].map((axis, i) => (
+                        <div key={axis}>
+                          <span>{axis}</span>
+                          <strong>{chosen.size[i].toFixed(2)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                    <dl>
+                      <dt>Volume</dt>
+                      <dd>{(chosen.volume_mm3 / 1000).toFixed(2)} cm³</dd>
+                      <dt>Instance</dt>
+                      <dd title={chosen.id}>{chosen.name}</dd>
+                    </dl>
+                    <button
+                      className="quiet-button full-width isolate-button"
+                      aria-pressed={isIsolated(visibility, selected)}
+                      title={
+                        isIsolated(visibility, selected)
+                          ? "Restore visibility"
+                          : "Isolate"
+                      }
+                      onClick={() => isolate(selected)}
+                    >
+                      <Crosshair size={14} />
+                      Isolate
+                    </button>
+                  </section>
+                )}
+              </>
+            ) : (
+              <div
+                className="inspector-empty"
+                title="Select an object or Part"
+                aria-label="No selection"
+              >
+                <span className="object-icon">
+                  <Crosshair size={24} />
+                </span>
+              </div>
+            )}
+            <section className="measurement-section">
+              <h2>
+                <Ruler size={17} />
+                Measure
+                <button
+                  className="help-icon"
+                  title="Minimum distance between installed objects. Shift-click to select a pair."
+                  aria-label="Measurement help"
+                >
+                  <CircleHelp size={13} />
+                </button>
+                <span>mm</span>
+              </h2>
+              {[0, 1].map((index) => (
+                <label className="measure-slot" key={index}>
+                  <span>{index ? "B" : "A"}</span>
+                  <select
+                    aria-label={`Measurement object ${index ? "B" : "A"}`}
+                    value={selected[index] ?? ""}
+                    onChange={(event) => {
+                      const next = [...selected];
+                      next[index] = event.target.value;
+                      setSelected(
+                        next
+                          .filter(Boolean)
+                          .filter(
+                            (value, position, values) =>
+                              values.indexOf(value) === position,
+                          ),
+                      );
+                      setPartName(null);
+                    }}
+                  >
+                    <option value="">—</option>
+                    {scene?.components.map((c) => (
+                      <option value={c.id} key={c.id}>
+                        {title(c.name)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              {measuring && (
+                <p className="measurement-pending">
+                  <RefreshCw size={13} className="spin" />
+                  Measuring…
+                </p>
+              )}
+              {measureError && <p className="inline-error">{measureError}</p>}
+              {measurement && (
+                <div
+                  className="measurement-result"
+                  data-testid="measurement-result"
+                >
+                  <span>MINIMUM DISTANCE</span>
+                  <strong>
+                    {mm(measurement.minimum_mm)}
+                    <small>mm</small>
+                  </strong>
+                  <p>
+                    <Check size={12} />
+                    {measurement.method === "native" ? "Native CAD" : "≈ Mesh"}
+                  </p>
+                  <dl>
+                    <dt>Bounding-box centres</dt>
+                    <dd>{mm(measurement.center_distance_mm)}</dd>
+                    {["ΔX", "ΔY", "ΔZ"].map((axis, i) => (
+                      <div className="delta-row" key={axis}>
+                        <dt>{axis}</dt>
+                        <dd>{mm(measurement.center_delta_mm[i])}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {measurement.minimum_mm < 0.000001 && (
+                    <p title="Minimum distance alone cannot distinguish contact from overlap.">
+                      Contact / overlap
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        </aside>
+      </div>
+      <footer className="status-bar">
+        <div>
+          <span className={`status-dot ${status.phase}`} />
+          <span title={status.message}>
+            {status.phase === "ready"
+              ? "Build up to date"
+              : status.phase === "building"
+                ? status.message
+                : status.phase === "error"
+                  ? "Build needs attention"
+                  : status.message}
+          </span>
+        </div>
+        <div>
+          {scene && (
+            <>
+              <span>
+                {scene.components.filter((c) => c.geometry === "native").length}{" "}
+                native
+              </span>
+              <span>
+                {scene.components.filter((c) => c.geometry === "mesh").length}{" "}
+                mesh
+              </span>
+              <span className="status-divider" />
+              <span>{scene.build_seconds.toFixed(1)}s build</span>
+            </>
+          )}
+          <span className="status-divider" />
+          <span>CadQuery · three-cad-viewer</span>
+        </div>
+      </footer>
+      {editingAnnotation && (
+        <AnnotationEditor
+          key={editingAnnotation.id}
+          annotation={editingAnnotation}
+          targetName={
+            editingAnnotation.target
+              ? title(nodes.get(editingAnnotation.target)?.name ?? "")
+              : undefined
+          }
+          onSave={saveNote}
+          onClose={() => setEditingAnnotation(null)}
+        />
+      )}
+      {scene && printParts && (
+        <SlicerPanel
+          scene={scene}
+          initialParts={printParts}
+          onClose={() => setPrintParts(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<App />);

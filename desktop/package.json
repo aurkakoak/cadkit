@@ -1,0 +1,41 @@
+{
+  "name": "@cadkit/desktop",
+  "version": "0.1.0",
+  "description": "A desktop workbench for CadKit projects",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "start": "npm run build && electron .",
+    "test": "playwright test",
+    "setup": "install-electron",
+    "format": "prettier --write src electron tests *.ts *.json index.html"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "chokidar": "5.0.0",
+    "lucide-react": "1.41.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "three": "0.184.0",
+    "three-cad-viewer": "5.0.4",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@types/three": "0.185.4",
+    "electron": "44.2.0",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
