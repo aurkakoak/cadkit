@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cadkit"
-version = "0.1.0"
+version = "0.2.0"
 readme = "README.md"
 description = "Inspectable CadQuery projects: model, validate, preview, render, and slice"
 requires-python = ">=3.11"
-dependencies = ["cadquery==2.8.0", "trimesh>=4.7,<6", "manifold3d>=3,<4"]
+dependencies = ["cadquery==2.8.0", "cq_warehouse @ git+https://github.com/gumyr/cq_warehouse.git@daa46507ecc429c0e2dce11d9d5ffd09b12a42af", "trimesh>=4.7,<6", "manifold3d>=3,<4"]
 
 [project.optional-dependencies]
 desktop = ["ocp-tessellate==3.5.0"]

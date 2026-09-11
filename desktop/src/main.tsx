@@ -23,11 +23,32 @@ import {
   Printer,
   MessageSquare,
   Plus,
+  Link2,
+  Nut,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import "three-cad-viewer/css";
 import "./style.css";
 import { Viewport } from "./Viewport";
 import { SlicerPanel } from "./SlicerPanel";
+import {
+  ConnectionIcon,
+  ConnectionInspector,
+  ConnectionsPanel,
+  HardwareControls,
+  ValidationPanel,
+} from "./ConnectionsPanel";
+import { MechanicalReview } from "./MechanicalReview";
+import {
+  connectionIds,
+  emptyMechanics,
+  findConnection,
+  hardwareHidden,
+  isHardware,
+  previewOffsets,
+  relatedConnections,
+} from "./mechanics";
 import { AnnotationCard, AnnotationMarkdown } from "./AnnotationCard";
 import { AnnotationEditor } from "./AnnotationEditor";
 import { annotationNodes } from "./annotations";
@@ -41,6 +62,11 @@ import type {
   TreeNode,
   Annotation,
   ViewportApi,
+  ConnectionKind,
+  ConnectionSelection,
+  HardwareView,
+  MechanicalFinding,
+  MechanicalReport,
 } from "./types";
 
 const title = (value: string) =>
@@ -72,15 +98,57 @@ function App() {
     message: "Starting CadQuery…",
   });
   const [theme, setTheme] = useState<Theme>(storedTheme);
-  const [tab, setTab] = useState<"assembly" | "parts">("assembly");
+  const [tab, setTab] = useState<"assembly" | "parts" | "connections">(
+    "assembly",
+  );
   const [search, setSearch] = useState("");
   const [visibility, dispatchVisibility] = useReducer(
     visibilityReducer,
     initialVisibility,
   );
-  const { hidden, isolation } = visibility;
+  const { hidden: manualHidden, isolation } = visibility;
+  const [selectedConnection, setSelectedConnection] =
+    useState<ConnectionSelection | null>(null);
+  const [hardwareView, setHardwareView] = useState<HardwareView>({
+    mode: "all",
+    previewProgress: 0,
+  });
+  const [mechanicalReport, setMechanicalReport] =
+    useState<MechanicalReport | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const [exportReview, setExportReview] = useState<{
+    part: string;
+    report: MechanicalReport;
+  } | null>(null);
+  const mechanics = scene?.mechanics ?? emptyMechanics;
+  const connection = findConnection(mechanics, selectedConnection);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string[]>([]);
+  const selectedHardwareIds =
+    connection && "hardware_ids" in connection
+      ? connection.hardware_ids
+      : selected;
+  const hidden = useMemo(
+    () =>
+      hardwareHidden(
+        scene?.components ?? [],
+        manualHidden,
+        hardwareView,
+        selectedHardwareIds,
+      ),
+    [scene, manualHidden, hardwareView, selectedHardwareIds],
+  );
+  const offsets = useMemo(
+    () =>
+      previewOffsets(
+        scene?.components ?? [],
+        hardwareView,
+        selectedHardwareIds,
+      ),
+    [scene, hardwareView, selectedHardwareIds],
+  );
+  const previewActive = offsets.size > 0;
   const [partName, setPartName] = useState<string | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [measuring, setMeasuring] = useState(false);
@@ -115,6 +183,13 @@ function App() {
     if (currentRevision.current === next.revision) return;
     currentRevision.current = next.revision;
     setScene(next);
+    setHardwareView((before) => ({ ...before, previewProgress: 0 }));
+    setSelectedConnection((before) =>
+      findConnection(next.mechanics ?? emptyMechanics, before) ? before : null,
+    );
+    setMechanicalReport(null);
+    setValidationError("");
+    setExportReview(null);
     const ids = new Set(next.components.map((c) => c.id));
     dispatchVisibility({ type: "reconcile", ids: [...ids] });
     setSelected((before) => before.filter((id) => ids.has(id)));
@@ -159,7 +234,12 @@ function App() {
     const sequence = ++measureSequence.current;
     setMeasurement(null);
     setMeasureError("");
-    if (!scene || selected.length !== 2) {
+    if (
+      !scene ||
+      selected.length !== 2 ||
+      selectedConnection ||
+      previewActive
+    ) {
       setMeasuring(false);
       return;
     }
@@ -189,9 +269,13 @@ function App() {
       .finally(() => {
         if (sequence === measureSequence.current) setMeasuring(false);
       });
-  }, [selected, scene?.revision]);
+  }, [selected, scene?.revision, selectedConnection, previewActive]);
 
+  const resetPreview = () =>
+    setHardwareView((before) => ({ ...before, previewProgress: 0 }));
   const pick = (id: string, multiple = false) => {
+    setSelectedConnection(null);
+    resetPreview();
     setPartName(null);
     setSelected((before) =>
       multiple
@@ -224,16 +308,91 @@ function App() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const exportPart = async () => {
-    if (!part) return;
+  const runValidation = async (parts?: string[]) => {
+    if (!scene) throw new Error("Build a project first");
+    setValidating(true);
+    setValidationError("");
+    try {
+      const result = await window.cadkit.mechanicalReport({
+        revision: scene.revision,
+        ...(parts ? { parts } : {}),
+      });
+      if (result.revision !== currentRevision.current)
+        throw new Error("Build changed; run checks again");
+      if (!parts) setMechanicalReport(result);
+      return result;
+    } catch (error) {
+      setValidationError(String(error));
+      throw error;
+    } finally {
+      setValidating(false);
+    }
+  };
+  const doExport = async (name: string, validationOverride?: string) => {
     setExporting(true);
     try {
-      if (await window.cadkit.exportPart(part.name))
-        setNotice(`Exported ${title(part.name)}`);
+      if (await window.cadkit.exportPart(name, validationOverride))
+        setNotice(`Exported ${title(name)}`);
     } catch (error) {
       setNotice(String(error));
     } finally {
       setExporting(false);
+    }
+  };
+  const exportPart = async () => {
+    if (!part) return;
+    setExporting(true);
+    try {
+      const report = await runValidation([part.name]);
+      if (
+        report.findings.some(
+          (f) =>
+            f.status === "fail" ||
+            (f.status === "unverified" &&
+              !(f.concept === "assembly" && f.entity === "coverage")),
+        )
+      )
+        setExportReview({ part: part.name, report });
+      else await doExport(part.name);
+    } catch (error) {
+      setNotice(String(error));
+    } finally {
+      setExporting(false);
+    }
+  };
+  const selectConnection = (kind: ConnectionKind, id: string, focus = true) => {
+    const candidate = findConnection(mechanics, { kind, id });
+    if (!candidate) throw new Error(`Unknown ${kind}: ${id}`);
+    setSelectedConnection({ kind, id });
+    setPartName(null);
+    setSelected(candidate.component_ids);
+    setTab("connections");
+    setMeasurement(null);
+    setHardwareView((before) => ({
+      mode: focus && kind === "fastening" ? "selected" : before.mode,
+      previewProgress: 0,
+    }));
+    if (focus) {
+      dispatchVisibility({ type: "show", ids: connectionIds(candidate) });
+      setHighlights({ ids: connectionIds(candidate), color: "#f1c789" });
+    }
+  };
+  const showFinding = (finding: MechanicalFinding) => {
+    resetPreview();
+    setHighlights({
+      ids: finding.component_ids,
+      color: finding.status === "fail" ? "#ec9b85" : "#f1c789",
+    });
+    dispatchVisibility({ type: "show", ids: finding.component_ids });
+    if (
+      finding.concept !== "assembly" &&
+      findConnection(mechanics, { kind: finding.concept, id: finding.entity })
+    )
+      selectConnection(finding.concept, finding.entity);
+    else {
+      setSelectedConnection(null);
+      setSelected(finding.component_ids);
+      setPartName(null);
     }
   };
 
@@ -245,6 +404,16 @@ function App() {
     selectedComponents:
       scene?.components.filter((c) => selected.includes(c.id)) ?? [],
     hidden: [...hidden],
+    manualHidden: [...manualHidden],
+    selectedConnection,
+    selectedConnectionDetails: connection ?? null,
+    hardwareView,
+    presentation: {
+      pose: previewActive ? "hardware-preview" : "installed",
+      measurementFrame: "installed",
+      offsetIds: [...offsets.keys()],
+    },
+    mechanicalReport,
     isolation: isolation
       ? {
           ids: [...isolation.ids],
@@ -305,12 +474,64 @@ function App() {
         components,
         parts: scene.project.parts.filter((p) => partNames.has(p.name)),
         measurement,
+        connections: relatedConnections(mechanics, ids),
+        measurementFrame: "installed",
         annotations: annotations.filter(
           (a) => a.target && [...ids, ...(params.ids ?? [])].includes(a.target),
         ),
       };
     }
-    if (method === "select") {
+    if (method === "inspect_connection") {
+      const target =
+        params.kind && params.id
+          ? { kind: params.kind, id: params.id }
+          : selectedConnection;
+      const candidate = findConnection(mechanics, target);
+      if (!candidate) throw new Error("Select a Joint, Interface or Fastening");
+      return {
+        revision: scene.revision,
+        kind: target!.kind,
+        connection: candidate,
+        findings:
+          mechanicalReport?.findings.filter(
+            (f) => f.concept === target!.kind && f.entity === candidate.name,
+          ) ?? [],
+        validation: mechanicalReport ? "checked" : "not_checked",
+      };
+    }
+    if (method === "show_mechanical_report") {
+      flushSync(() => {
+        setMechanicalReport(params);
+        setValidationError("");
+      });
+    } else if (method === "select_connection") {
+      flushSync(() =>
+        selectConnection(params.kind, params.id, params.focus !== false),
+      );
+    } else if (method === "set_hardware_view") {
+      if (params.mode && !["all", "hidden", "selected"].includes(params.mode))
+        throw new Error("Invalid hardware visibility mode");
+      if (
+        params.previewProgress !== undefined &&
+        (!Number.isFinite(params.previewProgress) ||
+          params.previewProgress < 0 ||
+          params.previewProgress > 1)
+      )
+        throw new Error("previewProgress must be between 0 and 1");
+      flushSync(() => {
+        setHardwareView((before) => ({
+          mode: params.mode ?? before.mode,
+          previewProgress:
+            (params.mode ?? before.mode) === "hidden"
+              ? 0
+              : (params.previewProgress ?? before.previewProgress),
+        }));
+        if (params.previewProgress) {
+          setMeasurement(null);
+          forcedMeasurement.current = null;
+        }
+      });
+    } else if (method === "select") {
       if (
         params.part &&
         !scene.project.parts.some((p) => p.name === params.part)
@@ -324,6 +545,8 @@ function App() {
         : expand(params.ids ?? [], true);
       flushSync(() => {
         setSelected(ids);
+        setSelectedConnection(null);
+        resetPreview();
         setPartName(params.part ?? null);
       });
     } else if (method === "visibility") {
@@ -334,9 +557,10 @@ function App() {
         : scene.components.map((c) => c.id);
       flushSync(() => {
         if (params.action === "isolate") isolate(ids);
-        else if (params.action === "show" && !params.ids.length)
+        else if (params.action === "show" && !params.ids.length) {
           dispatchVisibility({ type: "showAll" });
-        else dispatchVisibility({ type: params.action, ids });
+          setHardwareView((before) => ({ ...before, mode: "all" }));
+        } else dispatchVisibility({ type: params.action, ids });
       });
     } else if (method === "highlight") {
       const ids = expand(params.ids);
@@ -345,10 +569,15 @@ function App() {
       if (!viewportApi.current) throw new Error("Viewport is loading");
       viewportApi.current.camera(params);
     } else if (method === "show_measurement") {
+      if (previewActive)
+        throw new Error(
+          "Return hardware preview to the installed pose before measuring",
+        );
       expand(params.ids, true);
       forcedMeasurement.current = params;
       flushSync(() => {
         setPartName(null);
+        setSelectedConnection(null);
         setSelected([...params.ids]);
         setMeasurement(params);
         dispatchVisibility({ type: "show", ids: params.ids });
@@ -426,6 +655,12 @@ function App() {
     const allHidden = childIds.every((id) => hidden.has(id));
     const isAssembly = node.kind === "assembly";
     const isCollapsed = collapsed.has(node.id) && !search;
+    const failures =
+      mechanicalReport?.findings.filter(
+        (f) =>
+          f.status === "fail" &&
+          f.component_ids.some((id) => childIds.includes(id)),
+      ) ?? [];
     const notes = annotations.filter((a) => a.target === node.id);
     const notesOpen = noteRows.has(node.id);
     return (
@@ -465,6 +700,8 @@ function App() {
           >
             {isAssembly ? (
               <Boxes size={15} />
+            ) : isHardware(node) ? (
+              <Nut size={14} />
             ) : (
               <Box
                 size={14}
@@ -474,6 +711,19 @@ function App() {
             <span>{title(node.name)}</span>
             {isAssembly && <small>{childIds.length}</small>}
           </button>
+          {failures.length > 0 && (
+            <button
+              className="tree-warning"
+              title={`${failures.length} failed assembly checks`}
+              aria-label={`Assembly findings for ${node.name}`}
+              onClick={() => {
+                setTab("connections");
+                showFinding(failures[0]);
+              }}
+            >
+              <AlertTriangle size={13} />
+            </button>
+          )}
           <button
             className={`tree-note ${notes.length ? "has-notes" : ""}`}
             title={notes.length ? `${notes.length} notes` : "Add note"}
@@ -642,6 +892,15 @@ function App() {
               <Box size={15} />
               Parts <small>{scene?.project.parts.length ?? 0}</small>
             </button>
+            <button
+              className={tab === "connections" ? "active" : ""}
+              title="Joints, interfaces and fastenings"
+              aria-label="Connections"
+              onClick={() => setTab("connections")}
+            >
+              <Link2 size={15} />
+              <span className="connections-tab-label">Connections</span>
+            </button>
           </div>
           <div className="search">
             <Search size={14} />
@@ -655,6 +914,17 @@ function App() {
           </div>
           <div className="navigation-content">
             {scene && tab === "assembly" && tree(scene.tree)}
+            {scene && tab === "connections" && (
+              <ConnectionsPanel
+                mechanics={mechanics}
+                selected={selectedConnection}
+                search={search}
+                report={mechanicalReport}
+                onSelect={selectConnection}
+                onValidate={() => void runValidation().catch(() => {})}
+                validating={validating}
+              />
+            )}
             {scene &&
               tab === "parts" &&
               groups.map((group) => (
@@ -674,6 +944,8 @@ function App() {
                         key={p.name}
                         onClick={() => {
                           setPartName(p.name);
+                          setSelectedConnection(null);
+                          resetPreview();
                           setSelected(
                             scene.components
                               .filter((c) => c.part === p.name)
@@ -701,11 +973,26 @@ function App() {
               </div>
             )}
           </div>
+          {scene && (
+            <HardwareControls
+              view={hardwareView}
+              count={scene.components.filter(isHardware).length}
+              canPreview={scene.components.some((c) =>
+                c.metadata?.preview_offset_mm?.some((v) => v !== 0),
+              )}
+              onChange={setHardwareView}
+            />
+          )}
           <div className="navigator-footer">
             <span>
               {scene ? scene.components.length - hidden.size : 0} visible
             </span>
-            <button onClick={() => dispatchVisibility({ type: "showAll" })}>
+            <button
+              onClick={() => {
+                dispatchVisibility({ type: "showAll" });
+                setHardwareView((before) => ({ ...before, mode: "all" }));
+              }}
+            >
               Show all <Eye size={13} />
             </button>
           </div>
@@ -717,7 +1004,16 @@ function App() {
               theme={theme}
               hidden={hidden}
               selected={selected}
-              measurement={measurement}
+              measurement={previewActive ? null : measurement}
+              previewOffsets={offsets}
+              onResetPreview={resetPreview}
+              connectionGuides={
+                connection && "origin" in connection
+                  ? [{ origin: connection.origin, axis: connection.axis }]
+                  : connection && "sites" in connection
+                    ? connection.sites
+                    : []
+              }
               annotations={annotations}
               highlights={highlights}
               api={viewportApi}
@@ -782,6 +1078,7 @@ function App() {
                 onClick={() => {
                   setSelected([]);
                   setPartName(null);
+                  setSelectedConnection(null);
                 }}
               >
                 <X size={15} />
@@ -789,7 +1086,28 @@ function App() {
             )}
           </div>
           <div className="inspector-content">
-            {selected.length === 2 ? (
+            {connection && selectedConnection && scene ? (
+              <ConnectionInspector
+                connection={connection}
+                kind={selectedConnection.kind}
+                scene={scene}
+                report={mechanicalReport}
+                onPick={pick}
+                onSelect={selectConnection}
+                onFocus={() => {
+                  setHardwareView((before) => ({
+                    ...before,
+                    mode:
+                      selectedConnection.kind === "fastening"
+                        ? "selected"
+                        : before.mode,
+                    previewProgress: 0,
+                  }));
+                  isolate(connectionIds(connection));
+                }}
+                isolated={isIsolated(visibility, connectionIds(connection))}
+              />
+            ) : selected.length === 2 ? (
               <div className="object-heading">
                 <span className="object-icon">
                   <Ruler size={23} />
@@ -921,6 +1239,33 @@ function App() {
                 </span>
               </div>
             )}
+            {scene &&
+              !connection &&
+              relatedConnections(mechanics, selected).length > 0 && (
+                <section className="detail-section related-connections">
+                  <h2>Connections</h2>
+                  {relatedConnections(mechanics, selected).map(
+                    ({ kind, connection: c }) => (
+                      <button
+                        key={`${kind}:${c.id}`}
+                        onClick={() => selectConnection(kind, c.id)}
+                      >
+                        <ConnectionIcon kind={kind} />
+                        {c.name}
+                      </button>
+                    ),
+                  )}
+                </section>
+              )}
+            {tab === "connections" && (
+              <ValidationPanel
+                report={mechanicalReport}
+                busy={validating}
+                error={validationError}
+                onRun={() => void runValidation().catch(() => {})}
+                onPick={showFinding}
+              />
+            )}
             <section className="measurement-section">
               <h2>
                 <Ruler size={17} />
@@ -934,13 +1279,24 @@ function App() {
                 </button>
                 <span>mm</span>
               </h2>
+              {previewActive && (
+                <button
+                  className="preview-measure-warning"
+                  onClick={resetPreview}
+                >
+                  <AlertTriangle size={13} />
+                  Return to installed pose
+                </button>
+              )}
               {[0, 1].map((index) => (
                 <label className="measure-slot" key={index}>
                   <span>{index ? "B" : "A"}</span>
                   <select
                     aria-label={`Measurement object ${index ? "B" : "A"}`}
                     value={selected[index] ?? ""}
+                    disabled={previewActive}
                     onChange={(event) => {
+                      setSelectedConnection(null);
                       const next = [...selected];
                       next[index] = event.target.value;
                       setSelected(
@@ -1034,6 +1390,23 @@ function App() {
             </>
           )}
           <span className="status-divider" />
+          {scene && (
+            <button
+              className="status-validation"
+              onClick={() => {
+                setTab("connections");
+                void runValidation().catch(() => {});
+              }}
+              title="Check declared connections and installed collisions"
+            >
+              <ShieldCheck size={12} />
+              {validating
+                ? "Checking…"
+                : mechanicalReport
+                  ? `${mechanicalReport.scope ? "Parts · " : ""}${mechanicalReport.findings.filter((f) => f.status === "fail").length} failed · ${mechanicalReport.findings.filter((f) => f.status === "unverified").length} unverified`
+                  : "Not checked"}
+            </button>
+          )}
           <span>CadQuery · three-cad-viewer</span>
         </div>
       </footer>
@@ -1048,6 +1421,18 @@ function App() {
           }
           onSave={saveNote}
           onClose={() => setEditingAnnotation(null)}
+        />
+      )}
+      {exportReview && (
+        <MechanicalReview
+          report={exportReview.report}
+          part={exportReview.part}
+          onClose={() => setExportReview(null)}
+          onProceed={(reason) => {
+            const name = exportReview.part;
+            setExportReview(null);
+            void doExport(name, reason);
+          }}
         />
       )}
       {scene && printParts && (

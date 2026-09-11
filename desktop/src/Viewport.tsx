@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Display, Viewer } from "three-cad-viewer";
 import {
   AnnotationOverlay,
   type AnnotationOverlayApi,
 } from "./AnnotationOverlay";
 import {
+  ArrowHelper,
   Box3,
   Box3Helper,
   BufferGeometry,
@@ -31,7 +32,10 @@ import type {
   Measurement,
   Annotation,
   ViewportApi,
+  Vector,
 } from "./types";
+
+import { displaySnapshot } from "./mechanics";
 
 interface Props {
   scene: Snapshot;
@@ -42,6 +46,9 @@ interface Props {
   annotations: Annotation[];
   highlights: { ids: string[]; color: string };
   api: React.RefObject<ViewportApi | null>;
+  previewOffsets: Map<string, Vector>;
+  onResetPreview: () => void;
+  connectionGuides?: { origin: Vector; axis: Vector }[];
   onClearAnnotations: () => void;
   onEditAnnotation: (annotation: Annotation) => void;
   onDeleteAnnotation: (id: string) => void;
@@ -61,6 +68,10 @@ export function Viewport(props: Props) {
   const [axes, setAxes] = useState(false);
   const [grid, setGrid] = useState(false);
   const [ready, setReady] = useState(0);
+  const displayedScene = useMemo(
+    () => displaySnapshot(props.scene, props.previewOffsets),
+    [props.scene, props.previewOffsets],
+  );
 
   useEffect(() => {
     const viewer = instance.current;
@@ -235,6 +246,31 @@ export function Viewport(props: Props) {
   useEffect(() => {
     const viewer = instance.current;
     if (!viewer || !ready) return;
+    const originals: { group: Group; position: Vector3 }[] = [];
+    for (const [id, offset] of props.previewOffsets) {
+      const group = viewer.nestedGroup.groups[id];
+      if (!group) continue;
+      originals.push({ group, position: group.position.clone() });
+      group.parent?.updateWorldMatrix(true, false);
+      const origin = group.parent?.worldToLocal(new Vector3()) ?? new Vector3();
+      const destination =
+        group.parent?.worldToLocal(new Vector3(...offset)) ??
+        new Vector3(...offset);
+      group.position.add(destination.sub(origin));
+      group.updateWorldMatrix(false, true);
+    }
+    viewer.update(true);
+    return () => {
+      for (const { group, position } of originals) {
+        group.position.copy(position);
+        group.updateWorldMatrix(false, true);
+      }
+    };
+  }, [props.previewOffsets, ready]);
+
+  useEffect(() => {
+    const viewer = instance.current;
+    if (!viewer || !ready) return;
     const overlay = new Group();
     const boxes = [
       ...props.highlights.ids.map((id) => ({
@@ -247,7 +283,7 @@ export function Viewport(props: Props) {
       })),
     ];
     boxes.forEach(({ id, color }) => {
-      const component = props.scene.components.find((c) => c.id === id);
+      const component = displayedScene.components.find((c) => c.id === id);
       if (!component || props.hidden.has(id)) return;
       const [lo, hi] = component.bounds;
       const box = new Box3Helper(
@@ -263,6 +299,27 @@ export function Viewport(props: Props) {
       box.renderOrder = 20;
       overlay.add(box);
     });
+    for (const guide of props.connectionGuides ?? []) {
+      const length = Math.max(
+        3,
+        Math.min(
+          15,
+          Math.max(...props.scene.components.flatMap((c) => c.size)) * 0.18,
+        ),
+      );
+      const arrow = new ArrowHelper(
+        new Vector3(...guide.axis).normalize(),
+        new Vector3(...guide.origin),
+        length,
+        props.theme === "dark" ? 0xa2dec5 : 0x257451,
+        length * 0.25,
+        length * 0.12,
+      );
+      for (const material of [arrow.line.material, arrow.cone.material].flat())
+        material.depthTest = false;
+      arrow.renderOrder = 23;
+      overlay.add(arrow);
+    }
     let midpoint: Vector3 | null = null;
     const measure = props.measurement;
     if (
@@ -323,6 +380,9 @@ export function Viewport(props: Props) {
     props.measurement,
     props.hidden,
     props.highlights,
+    displayedScene,
+    props.connectionGuides,
+    props.theme,
     ready,
   ]);
 
@@ -333,6 +393,15 @@ export function Viewport(props: Props) {
         <span className="live-dot" /> ASSEMBLY VIEW{" "}
         <span className="viewport-separator">/</span> mm
       </div>
+      {props.previewOffsets.size > 0 && (
+        <button
+          className="assembly-preview-badge"
+          title="Presentation only. Return to installed pose for measurements and checks."
+          onClick={props.onResetPreview}
+        >
+          Assembly preview <span>↺</span>
+        </button>
+      )}
       <div className="view-tools" aria-label="Viewport controls">
         <button
           title="Fit visible objects"
@@ -402,7 +471,7 @@ export function Viewport(props: Props) {
       </div>
       <AnnotationOverlay
         annotations={props.annotations}
-        scene={props.scene}
+        scene={displayedScene}
         hidden={props.hidden}
         api={annotationApi}
         onLayout={() => instance.current?.update(true)}

@@ -14,7 +14,7 @@ import tempfile
 import tomllib
 
 
-DOCS = ("install.md", "api.md", "migration.md", "workflows.md", "interaction.md", "agent-guide.md", "contracts.md", "trials.md")
+DOCS = ("install.md", "api.md", "migration.md", "workflows.md", "mechanics.md", "interaction.md", "agent-guide.md", "contracts.md", "trials.md")
 
 
 def main():
@@ -65,7 +65,7 @@ def main():
         for name in DOCS:
             shutil.copy2(source / "docs" / name, docs / name)
             shutil.copy2(source / "docs" / name, refs / name)
-        shutil.copy2(source / "desktop" / "README.md", refs / "desktop.md")
+        (refs / "desktop.md").write_text((source / "desktop" / "README.md").read_text().replace("(../docs/", "("))
         shutil.copy2(source / "scripts" / "install_trial.py", root / "install.py")
         (root / "START-HERE.md").write_text(
             f"# {release_id}\n\n"

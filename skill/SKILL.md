@@ -1,6 +1,6 @@
 ---
 name: cadkit
-description: Work on CadKit CAD projects day to day. Edit CadQuery parts and parameters, inspect the user's live selection, measure fits, control the viewer, annotate designs, export, render and slice. Also supports setting up or migrating a project when requested.
+description: Work on CadKit CAD projects day to day. Edit CadQuery parts and parameters, inspect the user's live selection, declare joints, interfaces and fastenings, measure fits, control the viewer, annotate designs, export, render and slice. Also supports setting up or migrating a project when requested.
 ---
 
 # CadKit
@@ -13,6 +13,7 @@ are separate tasks, not prerequisites to repeat each session.
 Choose references for the task:
 
 - Working alongside the user in the app: [interaction](references/interaction.md).
+- Joints, intended interfaces, cq_warehouse fasteners and assembly validation: [mechanics](references/mechanics.md).
 - Editing geometry and parameters: [modelling loop](references/agent-guide.md).
 - Parts, Components, Assemblies and checks: [API](references/api.md).
 - Export, Blender and slicing: [workflows](references/workflows.md).
@@ -41,7 +42,9 @@ For a live app, confirm a successful new build before reporting the result:
 a failed rebuild retains the old model. A valid solid or an empty passing
 check set alone does not establish fit or manufacturing readiness.
 
-An installed `release.json` identifies the supplied runtime bundle. Use it
-rather than assuming a registry package or sibling checkout is equivalent.
+Follow the consumer setup for the active CadKit runtime. An installed
+`release.json` identifies a supplied trial, but an explicit development-source
+configuration takes precedence over an older receipt. Do not substitute a
+registry package or another checkout implicitly.
 Keep frozen releases unchanged. For a migration, record baseline, equivalence
 evidence, retained adapters and adoption gaps in the consumer.

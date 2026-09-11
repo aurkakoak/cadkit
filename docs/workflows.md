@@ -95,3 +95,9 @@ Quantities multiply per-Part estimates; they do not simulate packed plates.
 Retain outputs with `--artifact-dir`. CLI and desktop slicing never submit a
 print job. The desktop Print panel saves its executable/profile choices locally
 and provides background jobs, cancellation and artifact opening.
+
+## Assembly review
+
+Use [mechanical contracts](mechanics.md) for `mechanics`, `bom` and
+`validate-assembly`, pre-export findings and review overrides. Hardware counts
+are independent of the printable Part quantities and cover declared fastenings.

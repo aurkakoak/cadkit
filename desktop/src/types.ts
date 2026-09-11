@@ -55,6 +55,7 @@ export interface SliceJob {
   artifacts: string[];
   config: SlicerSettings;
   progress?: string;
+  assembly_validation?: MechanicalReport;
   error?: string;
   report?: {
     totals: {
@@ -95,6 +96,13 @@ export interface Component {
   volume_mm3: number;
   bounds: [number[], number[]];
   size: number[];
+  metadata?: {
+    role?: string;
+    fastening_id?: string;
+    spec_id?: string;
+    preview_offset_mm?: Vector;
+    [key: string]: unknown;
+  };
 }
 export interface Assembly {
   id: string;
@@ -110,6 +118,7 @@ export interface Snapshot {
   tree: Assembly;
   components: Component[];
   build_seconds: number;
+  mechanics?: Mechanics;
   project: {
     name: string;
     description: string;
@@ -154,7 +163,15 @@ declare global {
         revision: string;
         ids: string[];
       }): Promise<Measurement>;
-      exportPart(name: string): Promise<unknown | null>;
+      exportPart(
+        name: string,
+        validation_override?: string,
+      ): Promise<unknown | null>;
+      mechanicalReport(params: {
+        revision: string;
+        parts?: string[];
+        scan_collisions?: boolean;
+      }): Promise<MechanicalReport>;
       openLink(url: string): Promise<void>;
       slicerSettings(): Promise<SlicerSettings>;
       saveSlicer(
@@ -173,4 +190,96 @@ declare global {
       onEvent(callback: (event: AppEvent) => void): () => void;
     };
   }
+}
+
+export type ConnectionKind = "joint" | "interface" | "fastening";
+export interface ConnectionSelection {
+  kind: ConnectionKind;
+  id: string;
+}
+export interface ConnectionBase {
+  id: string;
+  name: string;
+  description: string;
+  component_ids: string[];
+  resolution_error?: string;
+}
+export interface Joint extends ConnectionBase {
+  kind: "rigid" | "revolute" | "slider";
+  origin: Vector;
+  axis: Vector;
+  limits: [number, number] | null;
+  position: number;
+  interfaces: string[];
+  fastenings: string[];
+}
+export interface Interface extends ConnectionBase {
+  kind: "contact" | "clearance" | "press_fit" | "threaded" | "mesh";
+  has_region: boolean;
+  max_overlap_mm3: number;
+  min_clearance_mm: number;
+  max_gap_mm: number | null;
+}
+export interface FastenerSpec {
+  kind: string;
+  size: string;
+  standard: string;
+  length_mm: number | null;
+  provider: string;
+  simple: boolean;
+  representation?: "catalogue" | "envelope";
+  custom_factory?: boolean;
+  manufacturer?: string;
+  part_number?: string;
+}
+export interface Fastening extends ConnectionBase {
+  kind: "through" | "tapped" | "insert";
+  joint: string | null;
+  sites: { name: string; origin: Vector; axis: Vector }[];
+  hardware: { name: string; spec: FastenerSpec; offset_mm: number }[];
+  hardware_ids: string[];
+  quantity?: number;
+  insertion_distance_mm: number;
+  grip_mm: number | null;
+  thread_depth_mm: number | null;
+  min_engagement_mm: number | null;
+  hole_depth_mm: number | null;
+  min_tip_clearance_mm: number;
+  access: { name: string; has_envelope: boolean; obstacles: string[] }[];
+}
+export type Connection = Joint | Interface | Fastening;
+export interface HardwareBomItem {
+  spec: FastenerSpec;
+  quantity: number;
+  [key: string]: unknown;
+}
+export interface Mechanics {
+  joints: Joint[];
+  interfaces: Interface[];
+  fastenings: Fastening[];
+  hardware_bom: HardwareBomItem[];
+}
+export interface MechanicalFinding {
+  id: string;
+  concept: ConnectionKind | "assembly";
+  entity: string;
+  code: string;
+  status: "pass" | "fail" | "unverified";
+  severity: "info" | "warning" | "error";
+  message: string;
+  component_ids: string[];
+  evidence: Record<string, unknown>;
+}
+export interface MechanicalReport {
+  revision: string;
+  schema_version: number;
+  status: "pass" | "fail" | "incomplete";
+  findings: MechanicalFinding[];
+  coverage: Record<string, unknown>;
+  scope?: { parts: string[]; component_ids: string[]; [key: string]: unknown };
+  parts?: string[];
+}
+export interface HardwareView {
+  mode: "all" | "hidden" | "selected";
+  previewProgress: number;
 }

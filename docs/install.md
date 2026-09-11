@@ -106,3 +106,11 @@ does not test the trial package's installation boundary.
 
 See [migration](migration.md), [API](api.md), [workflows](workflows.md), and the
 desktop reference supplied with the release for the next steps.
+
+## Development source selected by a consumer
+
+Follow the consumer setup when it explicitly selects a CadKit source checkout
+(e.g. `CADKIT_SOURCE`). For 0.2, install that checkout with its pinned
+cq_warehouse dependency and use its matching desktop source. A receipt for an
+older trial is historical provenance, not a command to downgrade the active
+source integration. Keep frozen trial bundles unchanged.

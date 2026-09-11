@@ -104,3 +104,10 @@ to the desktop and Blender. Preserve vendor attribution in the consumer.
 Use [contracts](contracts.md) for file schemas and [workflows](workflows.md) for
 commands. The installed wheel's Python source is available for API inspection
 when these references do not answer a question; record such documentation gaps.
+
+## Mechanical contracts (0.2)
+
+`Project.joints`, `Project.interfaces` and `Project.fastenings` are first-class
+collections. See [mechanics](mechanics.md) for constructors, located cq_warehouse
+hardware, validation, app and MCP contracts. Existing projects default to empty
+collections; `describe` remains lazy.

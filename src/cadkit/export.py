@@ -96,8 +96,19 @@ def export_part(part, directory):
     return info
 
 
-def build(project, parts, directory):
+def build(project, parts, directory, *, mechanical_report=None, validation_override=None):
+    from .preflight import scoped_report, reviewed_report
     directory = Path(directory)
+    parts = list(parts)
+    if mechanical_report is None and (project.joints or project.interfaces or project.fastenings):
+        assembly = project.get_assembly()
+        mechanical_report = scoped_report(project.validate_mechanics(assembly=assembly), assembly, parts, fastenings=project.fastenings)
+    if mechanical_report is not None:
+        # Persist the failed review too, but never leave an old manifest advertising it as a new successful build.
+        (directory / "manifest.json").unlink(missing_ok=True)
+        write_json(directory / "assembly-validation.json", mechanical_report)
+        mechanical_report = reviewed_report(mechanical_report, validation_override)
+        write_json(directory / "assembly-validation.json", mechanical_report)
     summaries = []
     for part in parts:
         info = export_part(part, directory)
@@ -117,6 +128,8 @@ def build(project, parts, directory):
         },
         "parts": summaries,
     }
+    if mechanical_report is not None:
+        manifest["assembly_validation"] = mechanical_report
     write_json(directory / "manifest.json", manifest)
     write_json(directory / "quantities.json", {p.name: p.quantity for p in parts})
     write_json(

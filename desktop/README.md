@@ -69,6 +69,17 @@ This version measures whole objects. Face/edge/axis selection, persistent
 annotations, project picking and packaged distribution remain future work.
 Blender continues through the CadKit CLI.
 
+## Mechanical connections
+
+The Connections tab exposes first-class Joints, Interfaces and Fastenings.
+Inspect participants, catalogue hardware, BOM quantities and validation findings.
+Hardware has All/Selected/Hidden visibility and a reversible assembly preview.
+Measurements use installed geometry; return the preview to zero before measuring.
+Run assembly checks here or review the selected Part set before printing.
+Known failures require an explicit override reason, stored with exported artifacts.
+Unverified coverage remains visible. See [mechanical contracts](../docs/mechanics.md)
+for modelling, validation limits, and the four dedicated MCP tools.
+
 ## MCP: connect an external agent
 
 Open the app, then click the **plug icon** to copy its MCP client configuration.

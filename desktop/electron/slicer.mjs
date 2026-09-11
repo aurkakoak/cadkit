@@ -88,7 +88,7 @@ export class Slicer {
     if (!job) throw new Error("Unknown slicer job");
     return job;
   }
-  async start({ revision, parts }, mode = "slice") {
+  async start({ revision, parts, validation_override }, mode = "slice") {
     const config = await this.settings();
     if (mode === "slice" && !config.ready)
       throw new Error(
@@ -107,6 +107,7 @@ export class Slicer {
     const job = {
       id,
       revision,
+      validation_override,
       parts: [...new Set(parts)],
       mode,
       phase: "exporting",
@@ -130,6 +131,7 @@ export class Slicer {
       JSON.stringify(
         {
           revision: job.revision,
+          validation_override: job.validation_override,
           parts: job.parts,
           mode: job.mode,
           config: job.config,
@@ -143,7 +145,11 @@ export class Slicer {
       job.revision,
       job.parts,
       path.join(job.directory, "parts"),
+      job.validation_override,
     );
+    this.update(job, {
+      assembly_validation: exported.manifest.assembly_validation ?? null,
+    });
     if (job.phase === "cancelled") return;
     if (job.mode === "prepare") {
       const artifacts = exported.manifest.parts.map((p) =>

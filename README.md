@@ -2,7 +2,8 @@
 
 CadKit is a Python tooling framework for people and LLMs building real objects
 with CadQuery. A small project contract connects named parts, parameters,
-assembly components and fit checks to fabrication and presentation tools.
+assembly components, joints, interfaces, fastenings and fit checks to fabrication
+and presentation tools.
 Geometry builders remain ordinary Python functions returning CadQuery
 Workplanes or Shapes. CadKit does not replace CadQuery or interpret OpenSCAD.
 
@@ -13,9 +14,8 @@ Python wheel, desktop sources, documentation and a portable `cadkit` skill.
 See [building and evaluating a trial](docs/trials.md) for the release process.
 The development-checkout commands below are for working on CadKit itself.
 
-The first consumer is the sibling `grinder` project. Brewer supplied useful
-patterns for part registries, bed orientation, rendering and slicer reporting;
-Brewer itself has not been migrated or modified.
+Grinder and Brewer are separate consumer projects. Brewer also exercises the
+mechanical contracts on real heat-set, tapped and through-bolted connections.
 
 The optional [desktop application](desktop/README.md) adds an Electron/React
 interface with three-cad-viewer, nested assembly visibility, Part inspection,
@@ -53,6 +53,9 @@ Keep this repository separate from consumers and install it with `pip install -e
 | `Part` | Pure geometry builder, group, material, quantity, print rotation, expected solid count |
 | `Component` | Named installed geometry, color, material, optional part association, explosion offset |
 | `Assembly` | Nested installed components and subassemblies with stable paths |
+| `Joint` | Mechanical relationship, frame, motion limits and linked contracts |
+| `Interface` | Bounded contact, clearance or permitted interference between components |
+| `Fastening` | Located cq_warehouse hardware stacks, quantities and assembly requirements |
 | `Parameter` | Value, units, description, source file and measured/assumed provenance |
 | `Check` | Forbidden intersection, required overlap, or native surface contact within a stated gap |
 
@@ -65,6 +68,10 @@ installed assembly. Use one builder for both paths.
 `list --json` and `inspect PART` expose metadata and measured geometry.
 A failed part validation or geometric check exits nonzero. Check reports record
 intersection volumes or contact gaps and export collision witnesses.
+
+See [mechanical contracts](docs/mechanics.md) and
+[`examples/mechanical_joint.py`](examples/mechanical_joint.py) for catalogue
+hardware, assembly validation, the Connections UI and MCP operations.
 
 ## Workflow
 

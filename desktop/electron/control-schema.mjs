@@ -16,10 +16,53 @@ const color = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/)
   .default("#f1c789");
+const conceptKind = z.enum(["joint", "interface", "fastening"]);
+const validationOverride = z
+  .string()
+  .trim()
+  .min(3)
+  .max(1000)
+  .optional()
+  .describe(
+    "Explicit reason for exporting despite assembly failures; saved with the artifact report. Read mechanical_report first.",
+  );
 export const definitions = {
+  mechanical_report: {
+    description:
+      "Validate native installed assembly collisions, Joint/Interface/Fastening contracts, fastener stacks and declared access. Returns revision-scoped findings, bounded intended contact, and explicit unverified coverage. Optional Parts restrict findings to a print set while retaining full assembly context. Does not establish loaded strength or every possible insertion path.",
+    schema: z.object({
+      revision,
+      parts: z.array(z.string().min(1)).min(1).max(100).optional(),
+      scan_collisions: z.boolean().default(true),
+    }),
+  },
+  inspect_connection: {
+    description:
+      "Inspect a first-class joint, interface or fastening by its ID from get_state.mechanics: resolved component references, hardware stack, BOM and declared limits. These are engineering definitions; hardware previews do not change native geometry.",
+    schema: z.object({ revision, kind: conceptKind, id: z.string().min(1) }),
+  },
+  select_connection: {
+    description:
+      "Select a Joint, Interface or Fastening in the app inspector and highlight its participants. Optional focus frames the relationship. Uses IDs from get_state.mechanics.",
+    schema: z.object({
+      revision,
+      kind: conceptKind,
+      id: z.string().min(1),
+      focus: z.boolean().default(false),
+    }),
+  },
+  set_hardware_view: {
+    description:
+      "Show all generated fasteners, hide them, or show only the selected fastening. previewProgress 0..1 displaces hardware along declared insertion offsets for presentation; 0 restores installed geometry. This is not an assembly-path proof. Reset to 0 for native measurements.",
+    schema: z.object({
+      revision,
+      mode: z.enum(["all", "hidden", "selected"]).optional(),
+      previewProgress: z.number().finite().min(0).max(1).optional(),
+    }),
+  },
   get_state: {
     description:
-      "Read the live UI: project, Parts, assembly tree, component IDs, selected Part/objects, visibility, highlights, measurement, camera and annotations. Geometry is in world millimetres; no triangle payload.",
+      "Read the live UI: project, Parts, assembly tree, component IDs, first-class joints/interfaces/fastenings and hardware BOM (mechanics), selected connection/Part/objects, hardware display/assembly preview, validation, visibility, highlights, measurement, camera and annotations. Geometry is in world millimetres; no triangle payload.",
     schema: z.object({}),
   },
   inspect: {
@@ -151,12 +194,20 @@ export const definitions = {
   slice_parts: {
     description:
       "Export named Parts in their print poses and start a headless slicer job using the app's saved profiles. Returns a job ID; poll slice_status for estimates/artifacts. Does not send to a printer.",
-    schema: z.object({ revision, parts: z.array(z.string()).min(1).max(100) }),
+    schema: z.object({
+      revision,
+      parts: z.array(z.string()).min(1).max(100),
+      validation_override: validationOverride,
+    }),
   },
   prepare_parts: {
     description:
       "Export named Parts as print-oriented STLs and open them in the configured slicer for manual setup. No slicing or printing is started.",
-    schema: z.object({ revision, parts: z.array(z.string()).min(1).max(100) }),
+    schema: z.object({
+      revision,
+      parts: z.array(z.string()).min(1).max(100),
+      validation_override: validationOverride,
+    }),
   },
   slice_status: {
     description:

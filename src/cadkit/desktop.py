@@ -24,6 +24,7 @@ from .cli import load_project
 from .export import build
 from .geometry import Mesh, mesh, shape
 from .project import Assembly
+from .preflight import scoped_report
 
 
 def json_default(value):
@@ -50,6 +51,8 @@ class Session:
         self.models = {}
         self.metadata = {}
         self.snapshot = None
+        self.assembly = None
+        self.mechanical_reports = {}
 
     def scene(self):
         if self.snapshot is not None:
@@ -64,6 +67,7 @@ class Session:
         started = time.monotonic()
         self.notify("Building assembly geometry…")
         assembly = self.project.get_assembly()
+        self.assembly = assembly
         parts = {part.name: part for part in self.project.parts}
 
         def visit(node, parent=""):
@@ -141,6 +145,7 @@ class Session:
                 "name": node.name,
                 "kind": "component",
                 "group": node.group,
+                "metadata": node.metadata,
                 "part": node.part,
                 "material": parts[node.part].material if node.part else node.material,
                 "color": color,
@@ -173,6 +178,7 @@ class Session:
             "project": self.project.describe(),
             "tree": tree,
             "components": list(self.metadata.values()),
+            "mechanics": self.project.mechanical_descriptions(assembly=assembly),
             "shapes": visuals,
             "build_seconds": round(time.monotonic() - started, 2),
         }
@@ -224,20 +230,40 @@ class Session:
             "center_delta_mm": [v - u for u, v in zip(*centers)],
         }
 
-    def export_part(self, name, output_dir):
+    def mechanical_report(self, revision, parts=None, scan_collisions=True):
+        if revision != self.revision:
+            raise ValueError("This request belongs to an older build")
+        if type(scan_collisions) is not bool:
+            raise ValueError("scan_collisions must be a boolean")
+        self.scene()
+        if scan_collisions not in self.mechanical_reports:
+            self.mechanical_reports[scan_collisions] = {
+                **self.project.validate_mechanics(assembly=self.assembly, scan_collisions=scan_collisions),
+                "revision": self.revision,
+            }
+        report = self.mechanical_reports[scan_collisions]
+        if parts is not None:
+            if not parts or len(parts) != len(set(parts)):
+                raise ValueError("Choose distinct Parts to review")
+            report = scoped_report(report, self.assembly, self.project.select(parts), fastenings=self.project.fastenings)
+        return report
+
+    def export_part(self, name, output_dir, validation_override=None):
         part = self.project.select([name])[0]
         destination = Path(output_dir).resolve()
-        manifest = build(self.project, [part], destination)
+        report = self.mechanical_report(self.revision, parts=[name])
+        manifest = build(self.project, [part], destination, mechanical_report=report, validation_override=validation_override)
         return {"directory": str(destination), "manifest": manifest}
 
-    def export_parts(self, revision, names, output_dir):
+    def export_parts(self, revision, names, output_dir, validation_override=None):
         if revision != self.revision:
             raise ValueError("This request belongs to an older build")
         if not names or len(names) != len(set(names)):
             raise ValueError("Choose distinct Parts to export")
         parts = self.project.select(names)
         destination = Path(output_dir).resolve()
-        manifest = build(self.project, parts, destination)
+        report = self.mechanical_report(revision, parts=names)
+        manifest = build(self.project, parts, destination, mechanical_report=report, validation_override=validation_override)
         return {"directory": str(destination), "manifest": manifest}
 
 
@@ -266,7 +292,7 @@ def main():
             try:
                 request = json.loads(line)
                 method = request["method"]
-                if method not in {"scene", "measure", "export_part", "export_parts"}:
+                if method not in {"scene", "measure", "export_part", "export_parts", "mechanical_report"}:
                     raise ValueError(f"Unknown method: {method}")
                 result = getattr(session, method)(**request.get("params", {}))
                 emit({"id": request["id"], "result": result})

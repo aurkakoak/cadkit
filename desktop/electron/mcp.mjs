@@ -12,7 +12,7 @@ const file = await connectionFile(
   arg("--project-dir", process.cwd()),
   arg("--project", "project:PROJECT"),
 );
-const server = new McpServer({ name: "cadkit", version: "0.1.0" });
+const server = new McpServer({ name: "cadkit", version: "0.2.0" });
 for (const [name, definition] of Object.entries(definitions)) {
   server.registerTool(
     name,
@@ -23,6 +23,8 @@ for (const [name, definition] of Object.entries(definitions)) {
         readOnlyHint: [
           "get_state",
           "inspect",
+          "inspect_connection",
+          "mechanical_report",
           "screenshot",
           "slicer_settings",
           "slice_status",
@@ -69,5 +71,32 @@ server.registerResource(
       },
     ],
   }),
+);
+server.registerResource(
+  "mechanics",
+  "cadkit://mechanics",
+  {
+    mimeType: "application/json",
+    description:
+      "First-class Joint, Interface and Fastening definitions, resolved participants, hardware BOM and latest revision-scoped validation. Joint motion metadata is not a solved assembly path.",
+  },
+  async (uri) => {
+    const state = await callApp(file, "get_state");
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "application/json",
+          text: JSON.stringify({
+            revision: state.revision,
+            mechanics: state.mechanics,
+            validation: state.mechanicalReport,
+            selectedConnection: state.selectedConnection,
+            hardwareView: state.hardwareView,
+          }),
+        },
+      ],
+    };
+  },
 );
 await server.connect(new StdioServerTransport());

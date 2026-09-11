@@ -37,6 +37,12 @@ def main(argv=None, *, project=None):
         "describe", help="JSON project schema, parts, dimensions, and checks"
     )
     sub.add_parser("doctor", help="report installed tools without starting a GUI")
+    sub.add_parser("mechanics", help="resolved joints, interfaces, fastenings and hardware BOM")
+    sub.add_parser("bom", help="hardware bill of materials from located fastenings")
+    mechanical = sub.add_parser("validate-assembly", help="scan installed collisions and validate declared mechanical relationships")
+    mechanical.add_argument("--parts", nargs="+", help="review a print set in complete assembly context")
+    mechanical.add_argument("--no-collision-scan", action="store_true", help="only declared checks; automatic collision coverage remains unverified")
+    mechanical.add_argument("--output", type=Path, default=Path("build/assembly-validation.json"))
     listing = sub.add_parser("list", help="list parts and manufacturing metadata")
     listing.add_argument("--json", action="store_true")
     inspect = sub.add_parser(
@@ -48,6 +54,7 @@ def main(argv=None, *, project=None):
     )
     building.add_argument("parts", nargs="*", default=["all"])
     building.add_argument("--group")
+    building.add_argument("--validation-override", help="reason for exporting despite confirmed assembly failures; retained in manifest")
     building.add_argument("--output-dir", type=Path, default=Path("build/cadquery"))
     checking = sub.add_parser(
         "check", help="run named interference and required-contact checks"
@@ -148,6 +155,19 @@ def main(argv=None, *, project=None):
             subprocess.run(command, check=True)
             return 0
         project = project or load_project(args.project)
+        if args.command in {"mechanics", "bom"}:
+            descriptions = project.mechanical_descriptions(assembly=project.get_assembly())
+            print(json.dumps(descriptions["hardware_bom"] if args.command == "bom" else descriptions, indent=2))
+            return 0
+        if args.command == "validate-assembly":
+            from .preflight import scoped_report
+            assembly = project.get_assembly()
+            report = project.validate_mechanics(assembly=assembly, scan_collisions=not args.no_collision_scan)
+            if args.parts:
+                report = scoped_report(report, assembly, project.select(args.parts), fastenings=project.fastenings)
+            write_json(args.output, report)
+            print(json.dumps(report, indent=2))
+            return 1 if report["status"] == "fail" else 0
         if args.command == "describe":
             print(json.dumps(project.describe(), indent=2))
             return 0
@@ -165,7 +185,7 @@ def main(argv=None, *, project=None):
             print(json.dumps({**p.describe(), **inspect_model(p.build())}, indent=2))
         elif args.command == "build":
             selected = project.select(args.parts or ["all"], args.group)
-            build(project, selected, args.output_dir)
+            build(project, selected, args.output_dir, validation_override=args.validation_override)
         elif args.command == "check":
             known = {c.name: c for c in project.checks}
             unknown = set(args.names) - known.keys()

@@ -1614,3 +1614,391 @@ dd {
     font-size: 8px;
   }
 }
+
+/* Mechanical relationships share the assembly navigator and inspector. */
+.tabs {
+  padding-inline: 10px;
+  gap: 0;
+}
+.tabs button {
+  gap: 5px;
+  padding-inline: 9px;
+}
+.connections-tab-label {
+  display: none;
+}
+.tabs button[aria-label="Connections"] {
+  margin-left: auto;
+}
+.connections-list .parts-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.connections-list .parts-group h3 small {
+  margin-left: auto;
+  color: var(--quiet);
+}
+.connection-empty {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 8px 10px;
+}
+.connection-row > .connection-status {
+  flex: 0;
+}
+.connection-status {
+  display: inline-flex;
+  color: var(--quiet);
+}
+.connection-status.fail,
+.validation-counts .fail {
+  color: var(--warning);
+}
+.connection-status.pass {
+  color: var(--accent);
+}
+.connection-status.unverified {
+  color: var(--muted);
+}
+.validate-button {
+  margin: 12px;
+  width: calc(100% - 24px);
+}
+.hardware-controls {
+  border-top: 1px solid var(--line);
+  padding: 10px 13px;
+  font-size: 11px;
+}
+.hardware-controls > label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.hardware-controls select {
+  margin-left: auto;
+  max-width: 112px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--text);
+  padding: 4px 6px;
+}
+.hardware-preview-control {
+  display: flex;
+  align-items: end;
+  gap: 9px;
+  margin-top: 10px;
+}
+.hardware-preview-control label {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 10px;
+}
+.hardware-preview-control input {
+  width: 100%;
+  height: 14px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+.hardware-preview-control button {
+  padding: 3px;
+}
+.assembly-preview-badge {
+  position: absolute;
+  top: 26px;
+  right: 20px;
+  z-index: 12;
+  color: var(--warning);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  box-shadow: var(--shadow);
+  font-size: 10px;
+}
+.assembly-preview-badge span {
+  margin-left: 6px;
+  font-size: 14px;
+}
+.connection-inspector .object-heading h1 {
+  overflow-wrap: anywhere;
+  font-size: 21px;
+}
+.connection-members,
+.connection-links,
+.related-connections {
+  display: grid;
+  gap: 4px;
+}
+.connection-members button,
+.connection-links button,
+.related-connections button {
+  text-align: left;
+  justify-content: start;
+  padding: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.connection-members span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connection-links {
+  margin-top: 10px;
+}
+.connection-links button {
+  color: var(--accent);
+}
+.hardware-stack {
+  display: grid;
+  gap: 9px;
+}
+.hardware-stack > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.hardware-stack > div > span {
+  flex: 1;
+  text-transform: capitalize;
+}
+.hardware-stack small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  text-transform: none;
+}
+.hardware-stack strong {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.geometry-qualification {
+  display: block;
+  font-size: 9px;
+  color: var(--quiet);
+  margin-top: 12px;
+}
+.connection-sites {
+  margin: 14px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.connection-sites summary {
+  cursor: pointer;
+}
+.connection-sites dl {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+.connection-sites dd {
+  margin: 0;
+}
+.validation-panel {
+  border-top: 1px solid var(--line);
+  padding: 17px 0;
+}
+.validation-panel > h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.validation-panel > h2 button {
+  margin-left: auto;
+}
+.validation-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  padding: 12px 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.validation-counts > * {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+.validation-counts button {
+  padding: 0;
+}
+.validation-counts button[aria-pressed="true"] {
+  color: var(--accent);
+}
+.finding-list {
+  display: grid;
+  gap: 5px;
+}
+.mechanical-finding {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.mechanical-finding summary {
+  cursor: pointer;
+  display: flex;
+  gap: 7px;
+  padding: 9px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  list-style: none;
+}
+.mechanical-finding summary .connection-status {
+  padding-top: 2px;
+}
+.mechanical-finding summary > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mechanical-finding[open] summary {
+  background: var(--panel-raised);
+}
+.finding-detail {
+  padding: 8px;
+}
+.finding-detail small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  display: block;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.finding-detail pre,
+.validation-coverage pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.validation-coverage {
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.validation-coverage summary {
+  cursor: pointer;
+}
+.status-validation {
+  font-size: 10px;
+  gap: 5px;
+  padding: 0;
+  color: var(--muted);
+}
+.preview-measure-warning {
+  color: var(--warning);
+  font-size: 10px;
+  margin: 8px 0;
+  padding: 5px;
+}
+.mechanical-review {
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  width: min(520px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 20px;
+}
+.mechanical-review::backdrop {
+  background: #0008;
+}
+.mechanical-review header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.mechanical-review h1 {
+  font-size: 16px;
+}
+.mechanical-review header button {
+  margin-left: auto;
+}
+.mechanical-review > strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.mechanical-review footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+.validation-override {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  color: var(--warning);
+  font-size: 11px;
+}
+.validation-override input {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  padding: 8px;
+  color: var(--text);
+}
+.print-validation {
+  border-top: 1px solid var(--line);
+  padding: 0 24px 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.print-validation .validation-panel {
+  border: 0;
+  padding-bottom: 0;
+}
+@media (min-width: 1600px) {
+  .connections-tab-label {
+    display: inline;
+  }
+  .workspace {
+    grid-template-columns: 310px minmax(0, 1fr) 310px;
+  }
+}
+.hardware-bom details {
+  margin: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 7px;
+}
+.hardware-bom summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+}
+.hardware-bom summary > span {
+  flex: 1;
+  text-transform: capitalize;
+}
+.hardware-bom summary small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 4px;
+  text-transform: none;
+}
+.hardware-bom summary strong {
+  font-weight: 500;
+  color: var(--muted);
+}
+.tree-warning {
+  flex-shrink: 0;
+  color: var(--warning);
+  padding: 3px;
+}

@@ -44,6 +44,7 @@ let queued = false;
 let status = { phase: "idle", message: "Ready to build" };
 let watcher, debounce;
 let bridge, slicer;
+let mechanicalReport = null;
 const rendererRequests = new Map();
 let rendererSequence = 0;
 const workerEnv = () => ({
@@ -93,12 +94,68 @@ async function executeTool(method, raw) {
       project: snapshot.project,
       tree: snapshot.tree,
       components: snapshot.components,
+      mechanics: snapshot.mechanics,
+      mechanicalReport,
       status,
       projectDir,
       reference,
     };
   }
+  if (method === "mechanical_report") {
+    const worker = current;
+    const result = await worker.call("mechanical_report", params);
+    checkRevision(params.revision);
+    mechanicalReport = result;
+    await control("show_mechanical_report", result);
+    return result;
+  }
+  if (method === "inspect_connection") {
+    const collection =
+      snapshot.mechanics[
+        params.kind === "interface" ? "interfaces" : params.kind + "s"
+      ];
+    const connection = collection.find(
+      (item) => (item.id ?? item.name) === params.id,
+    );
+    if (!connection) throw new Error(`Unknown ${params.kind}: ${params.id}`);
+    const componentIds = [
+      ...connection.component_ids,
+      ...(connection.hardware_ids ?? []),
+    ];
+    const findings =
+      mechanicalReport?.findings?.filter(
+        (f) =>
+          (f.concept === params.kind && f.entity === params.id) ||
+          (f.concept === "assembly" &&
+            f.component_ids.some((id) => componentIds.includes(id))),
+      ) ?? [];
+    const direct = findings.filter(
+      (f) => f.concept === params.kind && f.entity === params.id,
+    );
+    return {
+      revision: snapshot.revision,
+      kind: params.kind,
+      connection,
+      components: snapshot.components.filter((c) =>
+        componentIds.includes(c.id),
+      ),
+      findings,
+      validation_scope: mechanicalReport?.scope ?? null,
+      validation_status: findings.some((f) => f.status === "fail")
+        ? "fail"
+        : !direct.length
+          ? "not_checked"
+          : findings.some((f) => f.status === "unverified")
+            ? "incomplete"
+            : "pass",
+    };
+  }
   if (method === "measure") {
+    const ui = await control("get_state");
+    if (ui.hardwareView?.previewProgress > 0)
+      throw new Error(
+        "Restore installed hardware (previewProgress=0) before measuring native geometry",
+      );
     const result = await current.call("measure", {
       revision: params.revision,
       ids: params.ids,
@@ -125,6 +182,10 @@ async function executeTool(method, raw) {
     for (const name of params.parts)
       if (!snapshot.project.parts.some((p) => p.name === name))
         throw new Error(`Unknown Part: ${name}`);
+    if (status.phase !== "ready")
+      throw new Error(
+        "Wait for a successful current build before exporting or slicing",
+      );
     return slicer.start(params, method === "slice_parts" ? "slice" : "prepare");
   }
   if (method === "slice_status") return slicer.list(params.id);
@@ -250,6 +311,7 @@ async function rebuild() {
       current = candidate;
       candidate = undefined;
       snapshot = next;
+      mechanicalReport = null;
       previous?.close();
       publish({ type: "scene", scene: next });
       publish({
@@ -352,7 +414,10 @@ ipcMain.handle("cadkit:mcp-config", () => {
   clipboard.writeText(JSON.stringify(config, null, 2));
   return { copied: true };
 });
-ipcMain.handle("cadkit:measure", (_event, params) => {
+ipcMain.handle("cadkit:mechanical-report", (_event, params) =>
+  dispatch("mechanical_report", params),
+);
+ipcMain.handle("cadkit:measure", async (_event, params) => {
   if (!current) throw new Error("Build a project first");
   if (
     !params ||
@@ -363,12 +428,17 @@ ipcMain.handle("cadkit:measure", (_event, params) => {
   ) {
     throw new Error("Invalid measurement request");
   }
+  const ui = await control("get_state");
+  if (ui.hardwareView?.previewProgress > 0)
+    throw new Error(
+      "Restore installed hardware before measuring native geometry",
+    );
   return current.call("measure", {
     revision: params.revision,
     ids: params.ids,
   });
 });
-ipcMain.handle("cadkit:export", async (_event, name) => {
+ipcMain.handle("cadkit:export", async (_event, name, validation_override) => {
   if (
     !current ||
     typeof name !== "string" ||
@@ -376,6 +446,9 @@ ipcMain.handle("cadkit:export", async (_event, name) => {
   ) {
     throw new Error("Unknown part");
   }
+  if (status.phase !== "ready")
+    throw new Error("Wait for a successful current build before exporting");
+  const revision = snapshot.revision;
   const selected = await dialog.showOpenDialog(window, {
     title: `Export ${name} · choose a destination folder`,
     defaultPath: path.join(projectDir, "build"),
@@ -384,7 +457,14 @@ ipcMain.handle("cadkit:export", async (_event, name) => {
   if (selected.canceled) return null;
   // Each part gets its own directory so manifests for other exports survive.
   const output_dir = path.join(selected.filePaths[0], name);
-  const result = await current.call("export_part", { name, output_dir });
+  checkRevision(revision);
+  if (status.phase !== "ready")
+    throw new Error("The model changed while choosing an export destination");
+  const result = await current.call("export_part", {
+    name,
+    output_dir,
+    validation_override,
+  });
   await shell.openPath(result.directory);
   return result;
 });
@@ -398,9 +478,18 @@ app
       python,
       env: workerEnv(),
       publish,
-      exportParts: (revision, names, output_dir) => {
+      exportParts: (revision, names, output_dir, validation_override) => {
         checkRevision(revision);
-        return current.call("export_parts", { revision, names, output_dir });
+        if (status.phase !== "ready")
+          throw new Error(
+            "Wait for a successful current build before exporting",
+          );
+        return current.call("export_parts", {
+          revision,
+          names,
+          output_dir,
+          validation_override,
+        });
       },
     });
     bridge = await startBridge(projectDir, reference, dispatch);

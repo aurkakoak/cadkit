@@ -73,3 +73,13 @@ set. Read `slicer_settings` before `slice_parts`; monitor the returned job with
 manual preparation, `prepare_parts` opens the exported STLs in the slicer.
 Use the [workflows](workflows.md) for CLI exports and Blender presentation.
 Slicing generates estimates and artifacts; it does not submit to a printer.
+
+## Mechanical connections
+
+For attachment, hardware or intended-contact questions, inspect `get_state.mechanics`
+and the selected connection, then use `inspect_connection`. Read
+[mechanics](mechanics.md) before declaring or changing a Joint, Interface or
+Fastening. Run `mechanical_report` for the current revision; use
+`select_connection` and `set_hardware_view` to show the relationship. A preview
+is presentation only. Keep unknown coverage and supplier envelopes explicit,
+and preserve failures unless a deliberate override with a reason is requested.

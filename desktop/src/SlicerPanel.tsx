@@ -8,7 +8,13 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
-import type { Snapshot, SliceJob, SlicerSettings } from "./types";
+import { ValidationPanel } from "./ConnectionsPanel";
+import type {
+  MechanicalReport,
+  Snapshot,
+  SliceJob,
+  SlicerSettings,
+} from "./types";
 
 const basename = (file: string) => file.split(/[/\\]/).pop() || "Choose…";
 const duration = (seconds: number | null | undefined) =>
@@ -34,6 +40,54 @@ export function SlicerPanel({
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [validation, setValidation] = useState<MechanicalReport | null>(null);
+  const [validationError, setValidationError] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validationOverride, setValidationOverride] = useState("");
+  const validationSequence = useRef(0);
+  const selectionKey = [...parts].sort().join("\0");
+  const [validatedKey, setValidatedKey] = useState("");
+  const validationKey = `${scene.revision}:${selectionKey}`;
+  const validate = async () => {
+    const sequence = ++validationSequence.current;
+    setValidation(null);
+    setValidationError("");
+    setValidating(true);
+    try {
+      const report = await window.cadkit.mechanicalReport({
+        revision: scene.revision,
+        parts: [...parts],
+      });
+      if (sequence === validationSequence.current) {
+        setValidation(report);
+        setValidatedKey(validationKey);
+      }
+    } catch (error) {
+      if (sequence === validationSequence.current)
+        setValidationError(String(error));
+    } finally {
+      if (sequence === validationSequence.current) setValidating(false);
+    }
+  };
+  useEffect(() => {
+    setValidationOverride("");
+    if (parts.size) void validate();
+    else {
+      ++validationSequence.current;
+      setValidation(null);
+      setValidating(false);
+    }
+    return () => {
+      ++validationSequence.current;
+    };
+  }, [validationKey]);
+  const validationFailed =
+    validation?.findings.some((f) => f.status === "fail") ?? false;
+  const reviewed =
+    !validating &&
+    validation != null &&
+    validatedKey === validationKey &&
+    (!validationFailed || validationOverride.trim().length >= 3);
   const updateJob = (job: SliceJob) =>
     setJobs((before) => [job, ...before.filter((j) => j.id !== job.id)]);
   const attempt = async (action: () => Promise<unknown>) => {
@@ -73,6 +127,7 @@ export function SlicerPanel({
   };
   const start = (method: string) =>
     void attempt(async () => {
+      if (!reviewed) throw new Error("Review assembly checks before slicing");
       setStarting(true);
       try {
         if (config) setConfig(await window.cadkit.saveSlicer(config));
@@ -80,6 +135,9 @@ export function SlicerPanel({
           await window.cadkit.slicerAction(method, {
             revision: scene.revision,
             parts: [...parts],
+            ...(validationFailed
+              ? { validation_override: validationOverride.trim() }
+              : {}),
           }),
         );
       } finally {
@@ -263,7 +321,9 @@ export function SlicerPanel({
               <div className="print-actions">
                 <button
                   className="quiet-button"
-                  disabled={busy || !selected.length || !config.executable}
+                  disabled={
+                    busy || !selected.length || !config.executable || !reviewed
+                  }
                   onClick={() => start("prepare_parts")}
                   title="Export print-oriented STLs and open in slicer"
                 >
@@ -272,7 +332,9 @@ export function SlicerPanel({
                 </button>
                 <button
                   className="primary-button"
-                  disabled={busy || !selected.length || !config.ready}
+                  disabled={
+                    busy || !selected.length || !config.ready || !reviewed
+                  }
                   onClick={() => start("slice_parts")}
                   title={
                     config.ready
@@ -292,6 +354,25 @@ export function SlicerPanel({
             </p>
           )}
         </section>
+      </div>
+      <div className="print-validation">
+        <ValidationPanel
+          report={validatedKey === validationKey ? validation : null}
+          busy={validating}
+          error={validationError}
+          onRun={() => void validate()}
+        />
+        {validationFailed && (
+          <label className="validation-override">
+            Proceeding despite failed checks
+            <input
+              aria-label="Slice validation override reason"
+              placeholder="Reason…"
+              value={validationOverride}
+              onChange={(e) => setValidationOverride(e.target.value)}
+            />
+          </label>
+        )}
       </div>
       <section className="print-jobs">
         {jobs.length > 0 && <h2>Jobs</h2>}
@@ -356,6 +437,14 @@ export function SlicerPanel({
             )}
             {job.phase === "running" && job.progress && <p>{job.progress}</p>}
             {job.error && <pre role="alert">{job.error}</pre>}
+            {job.assembly_validation && (
+              <details className="validation-coverage">
+                <summary>
+                  Assembly checks · {job.assembly_validation.status}
+                </summary>
+                <pre>{JSON.stringify(job.assembly_validation, null, 2)}</pre>
+              </details>
+            )}
             {job.report && (
               <>
                 <div

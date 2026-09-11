@@ -3,7 +3,10 @@ contextBridge.exposeInMainWorld("cadkit", {
   load: () => ipcRenderer.invoke("cadkit:load"),
   rebuild: () => ipcRenderer.invoke("cadkit:rebuild"),
   measure: (params) => ipcRenderer.invoke("cadkit:measure", params),
-  exportPart: (name) => ipcRenderer.invoke("cadkit:export", name),
+  mechanicalReport: (params) =>
+    ipcRenderer.invoke("cadkit:mechanical-report", params),
+  exportPart: (name, validation_override) =>
+    ipcRenderer.invoke("cadkit:export", name, validation_override),
   openLink: (url) => ipcRenderer.invoke("cadkit:open-link", url),
   slicerSettings: () => ipcRenderer.invoke("cadkit:slicer-settings"),
   saveSlicer: (values) => ipcRenderer.invoke("cadkit:slicer-save", values),
