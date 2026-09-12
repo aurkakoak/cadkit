@@ -1,5 +1,9 @@
 # Consumer API
 
+An additive, experimental authoring API now lives under `cadkit.design`.
+See [declarative authoring](declarative.md) for explicitly owned manufacturing
+features and rigid assembly connections. The existing API below remains supported.
+
 CadKit 0.1 uses ordinary Python builders. Machine datums, purchased interfaces,
 motion states and specialized fabrication stay in the consumer. Keep imports
 and registry construction cheap; generate geometry inside builders.

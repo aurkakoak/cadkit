@@ -17,6 +17,10 @@ The development-checkout commands below are for working on CadKit itself.
 Grinder and Brewer are separate consumer projects. Brewer also exercises the
 mechanical contracts on real heat-set, tapped and through-bolted connections.
 
+This branch adds an opt-in [declarative authoring experiment](docs/declarative.md)
+under `cadkit.design`: parts own manufacturing features and assemblies connect
+their instances. It retains the existing API and desktop/export adapters.
+
 The optional [desktop application](desktop/README.md) adds an Electron/React
 interface with three-cad-viewer, nested assembly visibility, Part inspection,
 native distance measurements and live rebuilds. Dark mode is the default.
