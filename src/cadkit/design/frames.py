@@ -63,3 +63,20 @@ class PolarPattern:
 
     def describe(self):
         return {"kind": "polar", "radius": self.radius, "angles": self.angles}
+
+
+@dataclass(frozen=True)
+class PointPattern:
+    """Explicit sites in a feature's local XY plane, in millimetres."""
+    points: tuple[tuple[float, float], ...] = ((0, 0),)
+
+    def __post_init__(self):
+        points = tuple(tuple(float(v) for v in point) for point in self.points)
+        if not points or any(len(point) != 2 or not all(math.isfinite(v) for v in point) for point in points):
+            raise ValueError("Pattern needs finite XY points")
+        if len(set(points)) != len(points):
+            raise ValueError("Pattern sites must be distinct")
+        object.__setattr__(self, "points", points)
+
+    def describe(self):
+        return {"kind": "points", "points": self.points}

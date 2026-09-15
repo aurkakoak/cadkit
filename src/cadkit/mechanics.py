@@ -118,7 +118,7 @@ class Fastening:
     thread_size: str | None = None
 
     def __post_init__(self):
-        _entity(self.name, self.components)
+        _entity(self.name, self.components, minimum=1)
         if self.quantity is not None and (type(self.quantity) is not int or self.quantity < 1 or (self.sites and self.quantity != len(self.sites))):
             raise ValueError("Fastening quantity must be a positive integer matching located sites")
         if self.kind not in {"through", "tapped", "insert"}:
@@ -141,9 +141,9 @@ class Fastening:
                 "access": [a.describe() for a in self.access], "insertion_distance_mm": self.insertion_distance_mm}
 
 
-def _entity(name, components):
-    if not name or len(components) < 2 or len(set(components)) != len(components):
-        raise ValueError("Mechanical entities require a name and at least two distinct component references")
+def _entity(name, components, *, minimum=2):
+    if not name or len(components) < minimum or len(set(components)) != len(components):
+        raise ValueError(f"Mechanical entities require a name and at least {minimum} distinct component references")
 
 
 def _nonnegative(value, name):
@@ -241,18 +241,45 @@ def _bounds(model):
     return ((bb.xmin, bb.ymin, bb.zmin), (bb.xmax, bb.ymax, bb.zmax))
 
 
-def _overlaps_bounds(a, b):
-    aa, bb = _bounds(a), _bounds(b)
+def _overlaps_bounds(a, b, *, bounds=None):
+    bounds = _bounds if bounds is None else bounds
+    aa, bb = bounds(a), bounds(b)
     return all(min(aa[1][i], bb[1][i]) > max(aa[0][i], bb[0][i]) + 1e-8 for i in range(3))
 
 
+def _memoized_geometry_query(query):
+    """Cache one validation run's queries, including failures, by shape identity."""
+    results = {}
+    def cached(model):
+        key = id(model)
+        if key not in results:
+            try:
+                result = query(model)
+            except Exception as exc:
+                result = exc
+            # Retain the shape so transient access envelopes cannot reuse its ID.
+            results[key] = (model, result)
+        result = results[key][1]
+        if isinstance(result, Exception):
+            raise result.with_traceback(None)
+        return result
+    return cached
+
+
 def validate_mechanics(project, assembly=None, *, scan_collisions=True, tolerance_mm3=1e-5):
-    """Validate geometry and declared limits; never claim universal assemblability."""
+    """Validate geometry and declared limits; never claim universal assemblability.
+
+    Distances are needed only for declared interfaces. A failed distance query
+    leaves interface fit unverified without invalidating native collision evidence.
+    """
     if tolerance_mm3 <= 0 or not math.isfinite(tolerance_mm3):
         raise ValueError("Collision tolerance must be positive and finite")
     assembly = assembly if assembly is not None else project.get_assembly()
     index = component_index(assembly)
     models = {path: shape(component.model) for path, component in index.items()}
+    # Geometry is fixed during validation; discard these caches after every run.
+    bounds_for = _memoized_geometry_query(_bounds)
+    valid_solid = _memoized_geometry_query(lambda model: bool(model.isValid() and model.Solids()))
     envelope_ids = {
         path for path, component in index.items()
         if component.metadata.get("representation") == "envelope"
@@ -293,18 +320,25 @@ def validate_mechanics(project, assembly=None, *, scan_collisions=True, toleranc
         if ids:
             pair_interfaces.setdefault(tuple(sorted(ids)), []).append(interface)
     measured_pairs = {}
+    pair_distances = {}
     def measure_pair(ids):
         key = tuple(sorted(ids))
         if key not in measured_pairs:
             a, b = [models[path] for path in key]
             if any(isinstance(model, Mesh) or not isinstance(model, cq.Shape) for model in (a, b)):
                 raise TypeError("Native collision/distance validation unavailable for a mesh or unsupported shape")
-            if not all(model.isValid() and model.Solids() for model in (a, b)):
+            if not all(valid_solid(model) for model in (a, b)):
                 raise ValueError("Collision/distance validation requires valid solid components")
-            overlap = a.intersect(b) if _overlaps_bounds(a, b) else None
+            overlap = a.intersect(b) if _overlaps_bounds(a, b, bounds=bounds_for) else None
             volume = abs(overlap.Volume()) if overlap is not None else 0
-            measured_pairs[key] = (overlap, volume, a.distance(b))
+            measured_pairs[key] = (overlap, volume)
         return measured_pairs[key]
+    def distance_for_pair(ids):
+        key = tuple(sorted(ids))
+        if key not in pair_distances:
+            a, b = [models[path] for path in key]
+            pair_distances[key] = a.distance(b)
+        return pair_distances[key]
     def region_for(interface):
         if interface.name not in region_cache:
             region = shape(interface.region()) if interface.region is not None else None
@@ -317,7 +351,8 @@ def validate_mechanics(project, assembly=None, *, scan_collisions=True, toleranc
         if not ids:
             continue
         try:
-            overlap, volume, gap = measure_pair(ids)
+            overlap, volume = measure_pair(ids)
+            gap = distance_for_pair(ids)
             region = region_for(interface)
             outside = abs(overlap.cut(region).Volume()) if volume > tolerance_mm3 and region is not None else volume
             regional_gap = gap
@@ -353,9 +388,9 @@ def validate_mechanics(project, assembly=None, *, scan_collisions=True, toleranc
                 # Aggregate unsupported coverage rather than emitting thousands of duplicate rows.
                 continue
             try:
-                if not _overlaps_bounds(a, b):
+                if not _overlaps_bounds(a, b, bounds=bounds_for):
                     continue
-                overlap, volume, _ = measure_pair(ids)
+                overlap, volume = measure_pair(ids)
                 if volume <= tolerance_mm3:
                     continue
                 applicable = pair_interfaces.get(tuple(sorted(ids)), [])
@@ -484,7 +519,7 @@ def validate_mechanics(project, assembly=None, *, scan_collisions=True, toleranc
                     model = models[path]
                     if isinstance(model, Mesh):
                         raise ValueError("Native access check unavailable for mesh obstacles")
-                    overlap = abs(envelope.intersect(model).Volume()) if _overlaps_bounds(envelope, model) else 0
+                    overlap = abs(envelope.intersect(model).Volume()) if _overlaps_bounds(envelope, model, bounds=bounds_for) else 0
                     if overlap > tolerance_mm3:
                         blocked.append({"component_id": path, "overlap_mm3": overlap, "representation": "envelope" if path in envelope_ids else "catalogue"})
                 approximate = sorted(envelope_ids.intersection(obstacle_ids))

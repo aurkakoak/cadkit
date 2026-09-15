@@ -1,7 +1,8 @@
 """Located, simplified catalogue hardware backed by cq_warehouse.
 
 The local +Z axis is the insertion direction. A screw's origin is its under-head
-seat; its shaft points +Z and its head -Z. Nuts and washers start at local Z=0.
+seat; its shaft points +Z and its head -Z. A set screw starts at its drive-end
+plane and points +Z. Nuts and washers start at local Z=0.
 No host geometry is cut implicitly. Supplier-specific factories must describe
 whether they provide catalogue geometry or only an envelope.
 """
@@ -16,6 +17,7 @@ import cadquery as cq
 PROVIDER_REVISION = "daa46507ecc429c0e2dce11d9d5ffd09b12a42af"
 _CLASSES = {
     "socket_head_cap_screw": ("SocketHeadCapScrew", "iso4762"),
+    "set_screw": ("SetScrew", "iso4026"),
     "hex_head_screw": ("HexHeadScrew", "iso4017"),
     "button_head_screw": ("ButtonHeadScrew", "iso7380_1"),
     "countersunk_screw": ("CounterSunkScrew", "iso10642"),
@@ -156,14 +158,22 @@ class FastenerSite:
     name: str
     origin: tuple[float, float, float] = (0, 0, 0)
     axis: tuple[float, float, float] = (0, 0, 1)
+    x_axis: tuple[float, float, float] | None = None
 
     def __post_init__(self):
         if not self.name:
             raise ValueError("Fastener sites require a name")
         object.__setattr__(self, "origin", vector(self.origin, "origin"))
         object.__setattr__(self, "axis", vector(self.axis, "axis", unit=True))
+        if self.x_axis is not None:
+            object.__setattr__(self, "x_axis", vector(self.x_axis, "x_axis", unit=True))
+            if abs(sum(a*b for a,b in zip(self.axis,self.x_axis))) > 1e-9:
+                raise ValueError("Fastener x_axis must be perpendicular to its insertion axis")
 
     def place(self, model, offset_mm=0):
+        if self.x_axis is not None:
+            origin = tuple(p+a*offset_mm for p,a in zip(self.origin,self.axis))
+            return model.moved(cq.Location(cq.Plane(origin,xDir=self.x_axis,normal=self.axis)))
         x, y, z = self.axis
         if z < -1 + 1e-12:
             model = model.rotate((0, 0, 0), (1, 0, 0), 180)
@@ -172,4 +182,5 @@ class FastenerSite:
         return model.translate(tuple(a + b * offset_mm for a, b in zip(self.origin, self.axis)))
 
     def describe(self):
-        return {"name": self.name, "origin": self.origin, "axis": self.axis}
+        return {"name": self.name, "origin": self.origin, "axis": self.axis,
+                **({"x_axis": self.x_axis} if self.x_axis is not None else {})}

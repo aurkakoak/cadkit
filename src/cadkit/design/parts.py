@@ -32,6 +32,28 @@ class FDM:
         return {"process": "fdm", **asdict(self)}
 
 
+@dataclass(frozen=True)
+class LaserCut:
+    """A planar blank cut from explicitly dimensioned sheet stock."""
+    material: str
+    thickness: float
+    print_rotation: tuple = field(default=(0, 0, 0), init=False)
+
+    def __post_init__(self):
+        if not self.material:
+            raise ValueError("Sheet material must be explicit; use 'unspecified' when unknown")
+        if not math.isfinite(self.thickness) or self.thickness <= 0:
+            raise ValueError("Sheet thickness must be positive and finite")
+
+    def validate(self, body):
+        if abs(body.BoundingBox().zlen-self.thickness) > 1e-5:
+            raise ValueError("Laser-cut blank thickness does not match declared sheet stock")
+
+    def describe(self):
+        return {"process": "laser-cut", "material": self.material, "thickness": self.thickness,
+                "profile": "native-xy", "constant_section": "unverified"}
+
+
 def native(body):
     if isinstance(body, cq.Workplane):
         if len(body.vals()) != 1:
@@ -46,7 +68,7 @@ def native(body):
 class Part:
     name: str
     body: Callable
-    manufacture: FDM
+    manufacture: FDM | LaserCut
     features: Mapping[str, Feature] = field(default_factory=dict)
     ports: Mapping[str, Frame] = field(default_factory=dict)
     finalize: Callable | None = field(default=None, repr=False, compare=False)
@@ -69,13 +91,19 @@ class Part:
                 raise ValueError(f"{self.name}/features/{key}: {exc}") from exc
         if self.finalize is not None:
             body = native(self.finalize(body))
+        if hasattr(self.manufacture, "validate"):
+            self.manufacture.validate(body)
         return body
 
     def describe(self):
+        features = {key: feature.describe() for key, feature in self.features.items()}
         return {"schema_version": 1, "name": self.name,
-                "manufacture": self.manufacture.describe(),
-                "features": {key: f.describe() for key, f in self.features.items()},
-                "ports": {key: f.describe() for key, f in self.ports.items()}}
+                "manufacture": self.manufacture.describe(), "features": features,
+                "ports": {key: frame.describe() for key, frame in self.ports.items()},
+                "operations": [{"feature": key, **operation}
+                               for key, feature in features.items()
+                               for operation in feature.get("operations", ())]}
+
 
     def as_part(self, group, *, quantity=1, notes="", production=True):
         """Keep existing CLI, desktop, export and print-orientation behavior."""

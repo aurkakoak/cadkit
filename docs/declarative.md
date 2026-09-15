@@ -1,14 +1,15 @@
 # Experimental declarative authoring
 
-`from cadkit import design as d` opts into the first implementation of the
+`from cadkit import design as d` opts into the native authoring layer described by the
 [design proposal](declarative-api-proposal.md). Existing `cadkit.Part`,
 `cadkit.Assembly`, Project loaders, viewers and exporters keep their existing API.
 This namespace is experimental; it is not yet the whole proposed interface.
 
 CadQuery owns native geometry. A `d.Part` owns its lazy CadQuery body builder and
-an ordered dictionary of named features. An `InsertMount` recipe supplies the
-clearance-side and insert-side features. A `d.Assembly` binds those features,
-deriving rigid placement and the existing Fastening/Joint contracts. See the
+an ordered dictionary of named manufacturing features. Shared `InsertMount` and
+`ThreadedMount` recipes supply matched roles on participating parts. A
+`d.Assembly` binds features and local ports, owns nested composition and motion,
+and derives the existing geometry, manufacturing and mechanical contracts. See the
 complete runnable example in [`examples/insert_mount.py`](../examples/insert_mount.py).
 
 ```python
@@ -46,8 +47,8 @@ Brewer's existing outer-face partition for reliable STEP export. It does not alt
 the authored feature metadata; final geometry still needs the project's checks.
 
 The resulting legacy Part's `describe()` includes a `design` object containing
-named features, frames, manufacturing information and required insert-installation
-operations. Design assembly components expose the same object as metadata to the
+named features, frames, manufacturing information and secondary operations
+with feature provenance. Design assembly components expose the same object as metadata to the
 existing desktop worker and agent tools. There is no new feature-specific editor
 or face-selection UI in this slice.
 
@@ -58,19 +59,14 @@ Screw lengths and pocket dimensions stay explicit. Supplied access envelopes and
 bounded interfaces remain authoritative: aligned frames alone do not establish
 physical contact, allowable interference, stock thickness or load capacity.
 
-Current limits: socket-head screws with heat-set inserts, polar patterns, rigid
-placement of part instances, and FDM orientation metadata. Motion joints, nested
-design assemblies, generalized port connections, profile selection and execution
-of secondary manufacturing operations remain future work. Vendor meshes continue
-through the existing API; this authoring namespace accepts native CadQuery solids.
+See [Manufacturing features](manufacturing-features.md) for holes, fits, slots,
+D-bores, seals, bosses, tapping, insert installation and layered mounts. See
+[Declarative assemblies](declarative-assemblies.md) for ports, nested assemblies,
+revolute/slider joints, gear/rack coupling, named poses, purchased inventory,
+bounded interfaces, driver access and existing-project embedding.
 
-```sh
-PYTHONPATH=src:examples python -m cadkit.cli --project insert_mount:PROJECT describe
-PYTHONPATH=src:examples python -m cadkit.cli --project insert_mount:PROJECT preview
-PYTHONPATH=src python -m pytest tests -q
-```
-
-The example deliberately leaves supplier/process evidence incomplete. In Brewer,
-the migrated connection retains the machine's existing bounded interfaces and
-tool-access checks. A successful geometry build is not a completed manufacturing
-review.
+Placement is directed and deterministic; it is not a general constraint solver.
+The framework does not infer material, select an unrequested screw length,
+execute secondary operations or certify a physical fit. Purchased envelopes and
+unknown thread depths stay qualified evidence. Native CadQuery solids are the
+authoring boundary; vendor meshes continue through the existing API.
