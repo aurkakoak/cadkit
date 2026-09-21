@@ -1,4 +1,5 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { launchElectron } from "./electron";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -29,9 +30,8 @@ test("desktop visibility, Parts, measurements, theme persistence and rebuild rec
     process.env.CADKIT_TEST_PYTHON ??
       path.resolve("../../grinder/.venv/bin/python"),
   ];
-  if (process.env.CADKIT_TEST_NO_SANDBOX === "1") args.unshift("--no-sandbox");
   const launch = () =>
-    electron.launch({
+    launchElectron({
       args,
       env: { ...process.env, CADKIT_USER_DATA: path.join(dir, "profile") },
     });

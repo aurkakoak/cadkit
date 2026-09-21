@@ -1,4 +1,5 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { launchElectron } from "./electron";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -50,7 +51,7 @@ output.write_text('; filament used [g] = 12.5\\n; estimated printing time (norma
       currency: "GBP",
     }),
   );
-  const app = await electron.launch({
+  const app = await launchElectron({
     args: [
       path.resolve("."),
       "--project-dir",

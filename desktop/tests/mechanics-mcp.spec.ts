@@ -1,4 +1,5 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { launchElectron } from "./electron";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
@@ -12,7 +13,7 @@ test("mechanical contracts share live state, hardware presentation and revision-
     "utf8",
   );
   await writeFile(path.join(dir, "project.py"), source);
-  const app = await electron.launch({
+  const app = await launchElectron({
     args: [
       path.resolve("."),
       "--project-dir",

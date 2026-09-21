@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { electronTestArgs } from "./electron-test-options.mjs";
 
 const executable = process.argv[2];
 if (!executable)
@@ -19,7 +20,7 @@ try {
   delete env.ELECTRON_RUN_AS_NODE;
   const result = spawnSync(
     path.resolve(executable),
-    ["--smoke-test", "--smoke-output", output],
+    electronTestArgs(["--smoke-test", "--smoke-output", output], env),
     {
       cwd: temporary,
       env,
@@ -44,7 +45,7 @@ try {
   await new Promise((resolve, reject) => {
     const child = spawn(
       path.resolve(executable),
-      ["--mcp", "--project-dir", report.projectDir],
+      electronTestArgs(["--mcp", "--project-dir", report.projectDir], env),
       { cwd: temporary, env, stdio: ["pipe", "pipe", "pipe"] },
     );
     let output = "";

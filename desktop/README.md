@@ -292,6 +292,11 @@ not estimates of real printing.
 Linux tests need a graphical session (or an Xvfb display). The optional
 `CADKIT_TEST_NO_SANDBOX=1` is only for isolated test environments that cannot
 run Chromium's sandbox; the application itself does not disable the sandbox.
+Set `CADKIT_TEST_SOFTWARE_RENDERING=1` on test hosts without a usable GPU.
+CI explicitly selects Chromium's SwiftShader backend for the real WebGL
+viewport, including packaged-app smoke tests. These flags apply only to test
+launches. Electron stderr and renderer console/errors are saved to each test's
+`test-results/` directory and uploaded when CI fails.
 
 The 3D engine accounts for most of the frontend bundle. No remote services,
 fonts or rendering servers are required at runtime.

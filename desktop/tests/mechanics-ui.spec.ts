@@ -1,4 +1,5 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { launchElectron } from "./electron";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -26,7 +27,7 @@ test("connections, selective hardware presentation and pre-print review stay dis
   );
   const projectFile = path.join(directory, "project.py");
   await writeFile(projectFile, fixture);
-  const app = await electron.launch({
+  const app = await launchElectron({
     args: [
       path.resolve("."),
       "--project-dir",

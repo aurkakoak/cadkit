@@ -81,8 +81,11 @@ and SHA-256 checksums, and publish it. If an upload fails, the draft remains
 unpublished; remove that incomplete draft before rerunning the publish job.
 Do not move a published version tag to new code; release a new patch version.
 
-Manual **Run workflow** builds downloadable Actions artifacts without creating
-a release. Python distributions are attached to GitHub Releases; this workflow
+Manual **Run workflow** builds downloadable Actions artifacts by default. Select
+**Publish this version after all native builds pass** to create a new version
+tag and release from the tested commit after every build passes. This option
+rejects an existing version tag; use the tag-triggered workflow or a new version
+instead. Python distributions are attached to GitHub Releases; this workflow
 does not publish to PyPI or npm.
 
 Expected assets:
