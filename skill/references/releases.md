@@ -13,6 +13,7 @@ uv sync --locked --extra desktop
 uv run pytest tests -q
 cd desktop
 npm ci
+npm run setup
 npm run test:runtime
 npm run build
 ```
