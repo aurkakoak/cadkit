@@ -358,7 +358,7 @@ output.write_text('; filament used [g] = 12.5\\n; estimated printing time (norma
     await page.getByRole("button", { name: "Print", exact: true }).click();
     await page.getByRole("button", { name: "Slice", exact: true }).click();
     await expect
-      .poll(async () => (await call("slice_status")).jobs[0].phase)
+      .poll(async () => (await call("slice_status")).jobs[0]?.phase)
       .toBe("complete");
     const job = (await call("slice_status")).jobs[0];
     expect(job.report.totals.filament_g).toBe(25);
