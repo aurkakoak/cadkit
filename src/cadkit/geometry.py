@@ -19,12 +19,22 @@ EMPTY = None
 
 
 class Mesh:
+    """An explicit Manifold triangle-mesh boundary in an otherwise native CAD model.
+
+    Args:
+        manifold (manifold3d.Manifold): Valid Manifold solid.
+
+    Obtain one using `import_mesh` or `mesh`. Meshes can be shown, measured
+    approximately, transformed, and exported as STL. They do not become analytic
+    STEP solids. Translation and rotation return new Mesh wrappers.
+    """
     def __init__(self, manifold):
         if manifold.status() != m3d.Error.NoError:
             raise ValueError(f"Invalid manifold mesh: {manifold.status()}")
         self.manifold = manifold
 
     def triangles(self):
+        """Return a trimesh.Trimesh using the manifold vertices and triangles without reprocessing."""
         mesh = self.manifold.to_mesh()
         return trimesh.Trimesh(
             mesh.vert_properties[:, :3], mesh.tri_verts, process=False
@@ -41,6 +51,17 @@ class Mesh:
 
 
 def shape(value):
+    """Unwrap a Workplane's first value; preserve Shapes, Meshes, and `None`.
+
+    Args:
+        value (object): CadQuery Workplane, native Shape, Mesh, or empty sentinel.
+
+    Returns:
+        (object): `.val()` for a Workplane, otherwise the original object.
+
+    This does not combine a Workplane stack. Return an explicit compound from
+    builders that intentionally contain multiple solids.
+    """
     if isinstance(value, cq.Workplane):
         return value.val()
     return value
@@ -51,6 +72,15 @@ def _items(values):
 
 
 def mesh(value):
+    """Convert native geometry to the explicit Manifold mesh representation.
+
+    Args:
+        value (object): Native Shape, Workplane, Mesh, or `None` for an empty mesh.
+
+    Returns:
+        (Mesh): Existing Mesh unchanged or newly tessellated geometry. Native
+            tessellation uses 0.025 mm linear and 0.08 rad angular tolerance.
+    """
     value = shape(value)
     if isinstance(value, Mesh):
         return value
@@ -69,6 +99,18 @@ def mesh(value):
 
 
 def import_mesh(path):
+    """Load an existing mesh file into a validated Manifold representation.
+
+    Args:
+        path (str | Path): Mesh file recognized by trimesh.
+
+    Returns:
+        (Mesh): Explicit mesh geometry in the file's numerical units; no rescaling.
+
+    Raises:
+        FileNotFoundError: The file does not exist.
+        ValueError: Manifold rejects the imported geometry.
+    """
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Missing source mesh: {path}")
@@ -120,6 +162,19 @@ def _planar(values):
 
 
 def union(values):
+    """Fuse all nonempty inputs, retaining the native/mesh boundary.
+
+    Args:
+        values (list): Shapes, Workplanes, Meshes, or `None`.
+
+    Returns:
+        (cq.Shape | Mesh | None): Native result when all inputs are native;
+            mesh result when any is a Mesh. Empty input yields `None`.
+
+    Planar native faces use planar booleans. `union` ignores `None` values;
+    `difference` is empty if its first value is `None`; `intersection` is
+    empty if any value is `None`.
+    """
     values = _items(values)
     if not values:
         return None
@@ -137,6 +192,19 @@ def union(values):
 
 
 def difference(values):
+    """Subtract subsequent inputs from the first, retaining the native/mesh boundary.
+
+    Args:
+        values (list): Shapes, Workplanes, Meshes, or `None`.
+
+    Returns:
+        (cq.Shape | Mesh | None): Native result when all inputs are native;
+            mesh result when any is a Mesh. Empty input yields `None`.
+
+    Planar native faces use planar booleans. `union` ignores `None` values;
+    `difference` is empty if its first value is `None`; `intersection` is
+    empty if any value is `None`.
+    """
     if not values or values[0] is None:
         return None
     values = _items(values)
@@ -154,6 +222,19 @@ def difference(values):
 
 
 def intersection(values):
+    """Intersect all inputs, retaining the native/mesh boundary.
+
+    Args:
+        values (list): Shapes, Workplanes, Meshes, or `None`.
+
+    Returns:
+        (cq.Shape | Mesh | None): Native result when all inputs are native;
+            mesh result when any is a Mesh. Empty input yields `None`.
+
+    Planar native faces use planar booleans. `union` ignores `None` values;
+    `difference` is empty if its first value is `None`; `intersection` is
+    empty if any value is `None`.
+    """
     if any(v is None for v in values):
         return None
     values = _items(values)
@@ -178,6 +259,15 @@ def _xyz(value):
 
 
 def translate(values, v):
+    """Union inputs and translate them in millimetres.
+
+    Args:
+        values (list): Input geometry.
+        v (tuple): XY or XYZ displacement; omitted trailing coordinates are zero.
+
+    Returns:
+        (cq.Shape | Mesh | None): Transformed geometry, or `None` for empty input.
+    """
     result = union(values)
     if result is None:
         return None
@@ -188,6 +278,16 @@ def translate(values, v):
 
 
 def rotate(values, a, v=None):
+    """Union inputs and rotate about the origin using degrees.
+
+    Args:
+        values (list): Input geometry.
+        a (float | tuple): One angle about `v`, or X/Y/Z angles applied in that order.
+        v (tuple | None): Axis for a scalar angle; defaults to positive Z.
+
+    Returns:
+        (cq.Shape | Mesh | None): Rotated geometry.
+    """
     result = union(values)
     if result is None:
         return None
@@ -200,6 +300,15 @@ def rotate(values, a, v=None):
 
 
 def mirror(values, v):
+    """Union inputs and reflect about a plane through the origin.
+
+    Args:
+        values (list): Input geometry.
+        v (tuple): Plane normal.
+
+    Returns:
+        (cq.Shape | Mesh | None): Reflected geometry.
+    """
     result = union(values)
     if result is None:
         return None
@@ -215,6 +324,16 @@ def mirror(values, v):
 
 
 def scale(values, v):
+    """Union inputs and scale about the origin.
+
+    Args:
+        values (list): Nonempty input geometry.
+        v (float | tuple): Uniform factor or XYZ factors.
+
+    Returns:
+        (cq.Shape | Mesh): Scaled geometry. Nonuniform native scaling uses a
+            general geometry transform rather than a rigid placement.
+    """
     result = union(values)
     if isinstance(v, (int, float)):
         v = (v, v, v)
@@ -227,6 +346,7 @@ def scale(values, v):
 
 
 def circle(r=None, d=None, facets=None):
+    """Return a native XY disk centred at the origin. Supply radius `r` or diameter `d` in millimetres; `d` wins. `facets` is accepted but unused."""
     radius = d / 2 if d is not None else r
     if radius is None or radius <= 0:
         raise ValueError("Circle radius must be positive")
@@ -238,12 +358,14 @@ def circle(r=None, d=None, facets=None):
 
 
 def polygon(points):
+    """Return a native closed XY face from ordered 2D/3D points in millimetres."""
     return cq.Face.makeFromWires(
         cq.Wire.makePolygon([cq.Vector(*_xyz(p)) for p in points], close=True)
     )
 
 
 def square(size, center=False):
+    """Return a native XY rectangle. `size` is one length or an `(x, y)` pair in millimetres; `center=False` uses positive XY."""
     if isinstance(size, (int, float)):
         size = (size, size)
     x, y = size
@@ -252,6 +374,7 @@ def square(size, center=False):
 
 
 def cube(size, center=False):
+    """Return a native box. `size` is one length or XYZ lengths in millimetres; `center=False` uses positive XYZ."""
     if isinstance(size, (int, float)):
         size = (size, size, size)
     if min(size) <= 0:
@@ -263,6 +386,7 @@ def cube(size, center=False):
 def cylinder(
     h, r=None, d=None, d1=None, d2=None, r1=None, r2=None, center=False, facets=None
 ):
+    """Return a native +Z cylinder or cone of height `h` in millimetres. Use `r`/`d`, or `r1`/`d1` and `r2`/`d2` for bottom/top. `center=True` centres Z. `facets <= 12` selects a polygonal prism; larger values retain analytic round geometry."""
     bottom = (
         d1 / 2
         if d1 is not None
@@ -288,12 +412,14 @@ def cylinder(
 
 
 def sphere(r=None, d=None, facets=None):
+    """Return an analytic sphere centred at the origin. Supply `r` or `d` in millimetres; `d` wins. `facets` is accepted but unused."""
     return cq.Solid.makeSphere(
         d / 2 if d is not None else r, angleDegrees1=-90, angleDegrees2=90
     )
 
 
 def linear_extrude(values, height, center=False, **kwargs):
+    """Union planar inputs and extrude their faces along +Z by `height` millimetres. `center=True` centres Z. Extra keyword arguments are accepted but unused; twist and taper are not implemented."""
     result = union(values)
     if result is None:
         return None
@@ -306,6 +432,7 @@ def linear_extrude(values, height, center=False, **kwargs):
 
 
 def rotate_extrude(values, angle=360, facets=None):
+    """Revolve an XY profile about world Z after mapping its Y axis to Z. `angle` is in degrees; `facets` is accepted but unused."""
     profile = rotate(values, (90, 0, 0))
     return union(
         [
@@ -316,6 +443,7 @@ def rotate_extrude(values, angle=360, facets=None):
 
 
 def offset(values, r=None, delta=None):
+    """Offset planar regions by `r` with arc joins or `delta` with intersection joins, in millimetres. Positive offsets expand outer boundaries and shrink holes."""
     profile = union(values)
     amount = r if r is not None else delta
     result = []
@@ -363,6 +491,7 @@ def _circle_hull(circles):
 
 
 def hull(values):
+    """Return a convex hull. Circles use native tangent geometry; other planar curves are sampled. Spatial hulls cross to the Mesh representation."""
     values = _items(values)
     if not values:
         return None
@@ -383,6 +512,7 @@ def hull(values):
 
 
 def projection(values, cut=False):
+    """Project tessellated input onto XY, or section at Z=0 with `cut=True`. Returns planar faces reconstructed from Manifold contours; this is not an analytic projection."""
     source = mesh(union(values)).manifold
     contours = source.slice(0).to_polygons() if cut else source.project().to_polygons()
     return union([polygon(contour) for contour in contours])
@@ -390,6 +520,16 @@ def projection(values, cut=False):
 
 # Higher-level primitives that accept ordinary CadQuery objects.
 def annulus(outer_diameter, inner_diameter, height):
+    """Build a native ring from Z=0 along positive Z.
+
+    Args:
+        outer_diameter (float): Outer diameter in millimetres.
+        inner_diameter (float): Inner diameter in millimetres.
+        height (float): Ring height in millimetres.
+
+    Returns:
+        (cq.Workplane): Native annular prism centred on the origin in XY.
+    """
     return (
         cq.Workplane("XY")
         .circle(outer_diameter / 2)
@@ -399,6 +539,18 @@ def annulus(outer_diameter, inner_diameter, height):
 
 
 def rounded_rect_prism(length, width, height, radius, *, centered=True):
+    """Build an XY rounded rectangle extruded from Z=0.
+
+    Args:
+        length (float): Overall X extent in millimetres.
+        width (float): Overall Y extent in millimetres.
+        height (float): Z height in millimetres.
+        radius (float): Corner radius, at most half the smaller XY extent.
+        centered (bool): Centre XY at the origin; if false, use positive XY extents.
+
+    Returns:
+        (cq.Workplane): Native rounded rectangular prism.
+    """
     require_radius = min(length, width) / 2
     if not 0 < radius <= require_radius:
         raise ValueError("Corner radius exceeds half the smaller side")
@@ -420,6 +572,19 @@ def rounded_rect_prism(length, width, height, radius, *, centered=True):
 
 
 def capsule(center=(0, 0), diameter=5, travel=10, angle=0, height=10):
+    """Build a rounded slot-shaped prism from two semicircular ends.
+
+    Args:
+        center (tuple): XY centre in millimetres.
+        diameter (float): Width in millimetres.
+        travel (float): Distance between end-circle centres in millimetres.
+            Overall length is `travel + diameter`.
+        angle (float): Long-axis angle in degrees from +X toward +Y.
+        height (float): Extrusion from Z=0 along +Z, in millimetres.
+
+    Returns:
+        (cq.Shape): Native capsule prism.
+    """
     dx = travel / 2 * math.cos(math.radians(angle))
     dy = travel / 2 * math.sin(math.radians(angle))
     return linear_extrude(
@@ -436,6 +601,15 @@ def capsule(center=(0, 0), diameter=5, travel=10, angle=0, height=10):
 
 
 def polar_points(radius, angles):
+    """Return XY points on a circle, preserving the supplied angle order.
+
+    Args:
+        radius (float): Radius in millimetres.
+        angles (tuple): Angles in degrees from +X toward +Y.
+
+    Returns:
+        (list[tuple]): XY pairs in millimetres.
+    """
     return [
         (radius * math.cos(math.radians(a)), radius * math.sin(math.radians(a)))
         for a in angles
@@ -443,6 +617,14 @@ def polar_points(radius, angles):
 
 
 def normalized_to_bed(model):
+    """Translate geometry vertically so its lowest point touches Z=0.
+
+    Args:
+        model (object): Native Shape, Workplane, or Mesh.
+
+    Returns:
+        (cq.Shape | Mesh): Translated geometry; X/Y placement and rotation are preserved.
+    """
     value = shape(model)
     if isinstance(value, Mesh):
         z = value.triangles().bounds[0, 2]

@@ -17,6 +17,14 @@ _OVERSHOOT = 0.1
 
 @dataclass(frozen=True)
 class Counterbore:
+    """Dimensions of a cylindrical head recess used by a hole or mount role.
+
+    Args:
+        diameter: Finished recess diameter in millimetres.
+        depth: Recess depth below the entry face in millimetres.
+        entry_extension: Additional cutter extension outside the entry face in
+            millimetres. It does not increase the nominal recess depth.
+    """
     diameter: float
     depth: float
     entry_extension: float = 0
@@ -30,6 +38,17 @@ class Counterbore:
 
 @dataclass(frozen=True)
 class InsertPocket:
+    """Explicit receiving geometry for a heat-set insert.
+
+    Args:
+        diameter: Finished pocket diameter in millimetres.
+        depth: Pocket depth in millimetres.
+        insert_outer_diameter: Optional measured insert outer diameter in
+            millimetres, used to bound installed-fit validation.
+
+    A catalogue thread size does not determine printed pocket fit. Choose
+    dimensions using the supplier's guidance and a process-specific coupon.
+    """
     diameter: float
     depth: float
     insert_outer_diameter: float | None = None
@@ -41,7 +60,17 @@ class InsertPocket:
             positive(self.insert_outer_diameter, "Insert outer diameter")
 
     def feature(self, *, at=Frame(), pattern=None, insert=None):
-        """Entry frame +Z points into the receiving material, like Hole."""
+        """Create a standalone owned feature for this pocket.
+
+        Args:
+            at (Frame): Entry frame, +Z into receiving material, matching Hole.
+            pattern (PointPattern | PolarPattern | None): Local XY sites.
+            insert (FastenerSpec | None): Heat-set insert specification with explicit
+                length. When provided, metadata includes an installation operation.
+
+        Returns:
+            (InsertPocketFeature): Material-removing feature for a Part definition.
+        """
         return InsertPocketFeature(self, at, pattern, insert)
 
 
@@ -73,6 +102,19 @@ class InsertPocketFeature:
 
 @dataclass(frozen=True)
 class InsertBoss(InsertPocketFeature):
+    """Add attached cylindrical reinforcement and cut an insert pocket into it.
+
+    Args:
+        pocket: Explicit InsertPocket dimensions.
+        at: Boss base and pocket entry frame, +Z into the boss.
+        pattern: Local XY sites or `None`.
+        insert: Optional heat-set insert specification with explicit length.
+        outer_diameter: Boss diameter in millimetres, larger than the pocket.
+        depth: Boss height in millimetres, at least the pocket depth.
+
+    Each boss must join the existing body. Pocket entry conventions match
+    `InsertPocket.feature()`, rather than the mating datum used by InsertMount.
+    """
     outer_diameter: float = 0
     depth: float = 0
 
@@ -101,11 +143,43 @@ class InsertBoss(InsertPocketFeature):
 class _Mount:
     def clearance_side(self, *, at=Frame(), thickness, head_recess=None,
                        offset=0, slot_length=None, slot_angle=0, slot_radial=False, supplied=False, drill_offsets=None):
+        """Create the outermost clamped role on which the screw head seats.
+
+        Args:
+            at (Frame): Shared mating datum, +Z toward the clamped layers.
+            thickness (float): This layer's thickness in millimetres.
+            head_recess (Counterbore | None): Optional head recess; must leave a seat.
+            offset (float): Layer start above the mating datum, in millimetres.
+            slot_length (float | None): Overall milled-slot length in millimetres.
+            slot_angle (float): Slot orientation in local XY degrees.
+            slot_radial (bool): Orient each slot along its radius from the pattern origin.
+            supplied (bool): Describe already supplied geometry without cutting it.
+            drill_offsets (tuple | None): Local XY drill offsets at every fastening
+                site. Mutually exclusive with `slot_length`; must cover the nominal axis.
+
+        Returns:
+            (MountFeature): Owned clearance role. Seat Z is offset plus thickness
+                minus recess depth, determining screw grip.
+        """
         return MountFeature(self, "clearance", at, thickness, head_recess, offset,
                             slot_length, slot_angle, slot_radial, supplied, drill_offsets)
 
     def middle_side(self, *, at=Frame(), thickness, offset=0, head_recess=None, supplied=False):
-        """An intermediate clamped layer, sharing the receiver's mating datum."""
+        """Create an intermediate clamped layer sharing the same mating datum.
+
+        Args:
+            at (Frame): Datum shared by every role.
+            thickness (float): Layer thickness in millimetres.
+            offset (float): Layer start above the receiver, in millimetres.
+            head_recess (Counterbore | None): Optional recess at this layer's outer face.
+            supplied (bool): Describe supplied geometry without modifying it.
+
+        Returns:
+            (MountFeature): Middle role to pass through `via=` in a connection.
+
+        Intermediate and outer layers must cover the grip continuously, without
+        gaps or overlaps. Every intermediate instance must also be placed.
+        """
         return MountFeature(self, "middle", at, thickness, head_recess, offset=offset, supplied=supplied)
 
     def validate_stack(self, clearance, intermediates=()):
@@ -137,6 +211,20 @@ class _Mount:
 
 @dataclass(frozen=True)
 class InsertMount(_Mount):
+    """One shared pattern, screw, and insert recipe for matching part features.
+
+    Args:
+        pattern: PointPattern or PolarPattern shared by every role.
+        screw: Headed screw specification, including its length.
+        insert: Matching heat-set insert specification with explicit length.
+        clearance_diameter: Finished screw clearance diameter in millimetres.
+        pocket: Explicit receiving pocket dimensions.
+        minimum_engagement: Required screw engagement in millimetres.
+
+    A mount frame is a mating datum: +Z points out of the receiver toward the
+    clamped parts. Insert pockets cut into negative local Z; clearance layers
+    occupy positive Z. Bind roles from the same mount object when connecting.
+    """
     pattern: object
     screw: FastenerSpec
     insert: FastenerSpec
@@ -159,6 +247,15 @@ class InsertMount(_Mount):
             raise ValueError("Pocket must accommodate the insert length")
 
     def insert_side(self, *, at=Frame(), supplied=False):
+        """Create the receiving insert role owned by a Part or Purchased definition.
+
+        Args:
+            at (Frame): Mating datum, +Z out of the receiver.
+            supplied (bool): Describe existing supplier geometry without cutting it.
+
+        Returns:
+            (MountFeature): Insert-side feature.
+        """
         return MountFeature(self, "insert", at, supplied=supplied)
 
     def describe(self):
@@ -180,10 +277,21 @@ class InsertMount(_Mount):
 
 @dataclass(frozen=True)
 class ThreadedMount(_Mount):
-    """A screw connection to a printed pilot or an existing purchased thread.
+    """Shared screw connection to a manufactured pilot or an existing supplied thread.
 
-    Unknown supplier engagement/hole depths remain None. A generated pilot must
-    have explicit dimensions; it produces a tapping operation in the part plan.
+    Args:
+        pattern: PointPattern or PolarPattern of fastening axes.
+        screw: Screw specification including length.
+        clearance_diameter: Finished clearance diameter in millimetres.
+        pilot_diameter: Manufactured pilot diameter in millimetres.
+        thread_depth: Available thread depth in millimetres.
+        hole_depth: Pilot or receiving-hole depth in millimetres.
+        minimum_engagement: Required engagement in millimetres, if known.
+        method: `tap-after-printing`, `tap-after-machining`, or `self-tapping`.
+
+    A generated receiving role requires explicit pilot diameter, thread depth,
+    and hole depth. A `supplied=True` role can leave unknown supplier values as
+    `None`; those checks remain unverified. +Z points outward from the receiver.
     """
     pattern: object
     screw: FastenerSpec
@@ -209,6 +317,15 @@ class ThreadedMount(_Mount):
             raise ValueError("Threaded mount needs an explicit supported manufacturing method")
 
     def threaded_side(self, *, at=Frame(), supplied=False):
+        """Create the receiving thread role.
+
+        Args:
+            at (Frame): Mating datum, +Z out of receiving material.
+            supplied (bool): Use an existing supplier thread without cutting a pilot.
+
+        Returns:
+            (MountFeature): Threaded-side feature with any required tapping operation.
+        """
         return MountFeature(self, "threaded", at, supplied=supplied)
 
     def describe(self):
@@ -229,7 +346,13 @@ class ThreadedMount(_Mount):
 
 @dataclass(frozen=True)
 class MountFeature:
-    """A manufactured or supplier-provided side of a connection recipe."""
+    """An owned side of a shared mount, returned by the mount's role factories.
+
+    Prefer `clearance_side`, `middle_side`, `insert_side`, or `threaded_side`
+    instead of constructing this record. `apply` performs its explicit cuts;
+    `supplied=True` preserves the body. `describe` includes the mounting recipe,
+    frame, layer dimensions, and postprocessing operations.
+    """
     mount: object
     role: str
     at: Frame = Frame()
@@ -280,6 +403,7 @@ class MountFeature:
 
     @property
     def seat(self):
+        """Return the clamped role screw-seat Z coordinate in millimetres; receivers have no seat."""
         if self.role not in {"clearance", "middle"}:
             raise ValueError("Only clamped roles have a screw/spacer seat")
         return self.offset + self.thickness - (self.head_recess.depth if self.head_recess else 0)

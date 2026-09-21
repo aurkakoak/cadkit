@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the distributable skill's references in sync with canonical documentation."""
+"""Build standalone agent references independently of the human documentation."""
 
 from __future__ import annotations
 
@@ -12,24 +12,25 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCES = ROOT / "skill" / "references"
+AGENT_SOURCES = ROOT / "agent-reference"
 LINK = re.compile(r"(\[[^\]]*\]\()([^\s)]+)([^)]*\))")
 
 
 def public_documents() -> list[Path]:
-    return sorted(path for path in (ROOT / "docs").glob("*.md") if not path.name.endswith(".local.md"))
+    return sorted(path for path in (ROOT / "docs").rglob("*.md") if not path.name.endswith(".local.md"))
 
 
 def reference_path(source: Path) -> Path:
-    if source.parent == ROOT / "docs":
-        return REFERENCES / source.name
+    if source.is_relative_to(AGENT_SOURCES):
+        return REFERENCES / source.relative_to(AGENT_SOURCES)
     if source == ROOT / "desktop" / "README.md":
         return REFERENCES / "desktop.md"
     return REFERENCES / source.relative_to(ROOT)
 
 
 def generated_references() -> dict[Path, bytes]:
-    """Copy public docs and their local link targets into a standalone skill."""
-    pending = [*public_documents(), ROOT / "desktop" / "README.md"]
+    """Copy agent guidance and its local link targets into a standalone skill."""
+    pending = [*sorted(AGENT_SOURCES.glob("*.md")), ROOT / "desktop" / "README.md"]
     generated: dict[Path, bytes] = {}
     while pending:
         source = pending.pop()
@@ -45,8 +46,26 @@ def generated_references() -> dict[Path, bytes]:
             if url.scheme or url.netloc or not url.path or url.path.startswith("/"):
                 return match[0]
             target = (source.parent / unquote(url.path)).resolve()
+            # The desktop README links to human guides. Keep the installed skill
+            # self-contained with its task-oriented equivalents, and link other
+            # human pages to the published book rather than copying autodoc markup.
+            equivalents = {
+                ROOT / "docs/how-to/install.md": AGENT_SOURCES / "install.md",
+                ROOT / "docs/reference/mechanics.md": AGENT_SOURCES / "mechanics.md",
+            }
+            target = equivalents.get(target, target)
             if not target.is_relative_to(ROOT) or not target.is_file() or target.name.endswith(".local.md"):
                 raise ValueError(f"Unpublishable documentation link in {source.relative_to(ROOT)}: {match[2]}")
+            if target.is_relative_to(ROOT / "docs"):
+                page = target.relative_to(ROOT / "docs").with_suffix("").as_posix()
+                if page == "index":
+                    page = ""
+                elif page.endswith("/index"):
+                    page = page[:-6]
+                published = "https://aurkakoak.github.io/cadkit/docs/" + (f"{page}/" if page else "")
+                if url.fragment:
+                    published += f"#{url.fragment}"
+                return match[1] + published + match[3]
             pending.append(target)
             relative = Path(os.path.relpath(reference_path(target), destination.parent)).as_posix()
             if url.query:

@@ -6,9 +6,15 @@ import cadquery as cq
 
 @dataclass(frozen=True)
 class Rigid:
+    """A connection whose parent and child datums coincide without motion.
+
+    Args:
+        kind: Relationship label; retain its default value, `rigid`.
+    """
     kind: str = "rigid"
 
     def location(self, position=0):
+        """Return the native relative Location for the given position in zero."""
         if position != 0:
             raise ValueError("Rigid connections have no motion coordinate")
         return cq.Location()
@@ -19,6 +25,15 @@ class Rigid:
 
 @dataclass(frozen=True)
 class Revolute:
+    """One rotation about the attachment frame's positive Z axis.
+
+    Args:
+        position: Default angle in degrees.
+        limits: Optional inclusive `(minimum, maximum)` angles in degrees.
+
+    Positions outside declared limits are rejected. This is a scalar placement
+    relationship, not a general constraint solver or a collision-free motion proof.
+    """
     position: float = 0
     limits: tuple[float, float] | None = None
 
@@ -32,6 +47,7 @@ class Revolute:
         return "revolute"
 
     def location(self, position=None):
+        """Return the native relative Location for the given position in degrees."""
         position = self.position if position is None else position
         _validate(position, self.limits)
         return cq.Location((0, 0, 0), (0, 0, 1), position)
@@ -42,11 +58,18 @@ class Revolute:
 
 @dataclass(frozen=True)
 class Slider(Revolute):
+    """One translation along the attachment frame's positive Z axis.
+
+    Args:
+        position: Default displacement in millimetres.
+        limits: Optional inclusive `(minimum, maximum)` displacements in millimetres.
+    """
     @property
     def kind(self):
         return "slider"
 
     def location(self, position=None):
+        """Return the native relative Location for the given position in millimetres."""
         position = self.position if position is None else position
         _validate(position, self.limits)
         return cq.Location((0, 0, position))

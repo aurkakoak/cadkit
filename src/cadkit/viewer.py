@@ -7,6 +7,19 @@ from .geometry import Mesh, shape
 def show_components(
     components, *, show_object=None, exploded=False, screenshot=None, interact=True
 ):
+    """Display installed Components in the CQ viewer or a CQ-editor callback.
+
+    Args:
+        components (list): Installed Components.
+        show_object (Callable | None): Optional CQ-editor-compatible callback.
+            It cannot display explicit Meshes; those are reported separately.
+        exploded (bool): Apply full Component explosion translations.
+        screenshot (str | None): Optional output image for the standalone viewer.
+        interact (bool): Keep the standalone viewer interactive.
+
+    Native geometry uses CadQuery's viewer; Meshes are shown as VTK actors.
+    This function does not start CadKit Desktop or expose its MCP bridge.
+    """
     assembly = cq.Assembly(name="CAD project")
     actors = []
     for c in components:

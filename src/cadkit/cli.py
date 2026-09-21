@@ -20,6 +20,20 @@ from .export import (
 
 
 def load_project(reference):
+    """Import a stable Project from a Python module reference.
+
+    Args:
+        reference (str): `module:attribute`, with `PROJECT` as the default attribute.
+
+    Returns:
+        (Project): Imported project, including declarative `as_project()` adapters.
+
+    Raises:
+        ValueError: The referenced value is not a stable Project instance.
+
+    Importing executes normal module-level Python code; project construction
+    should keep geometry in lazy builders.
+    """
     module, sep, attribute = reference.partition(":")
     project = getattr(importlib.import_module(module), attribute or "PROJECT")
     if not isinstance(project, Project):
@@ -28,6 +42,18 @@ def load_project(reference):
 
 
 def main(argv=None, *, project=None):
+    """Run the CadKit CLI over an imported or explicitly supplied Project.
+
+    Args:
+        argv (list[str] | None): Arguments excluding the program name, or process argv.
+        project (Project | None): Inject a Project instead of importing `--project`.
+
+    Returns:
+        (int): Zero on success or one for failed explicit validation checks.
+
+    Argument and supported operational errors exit through argparse with code 2.
+    See the CLI reference for command-specific options and output files.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--project", default="project:PROJECT", help="importable module:Project object"

@@ -26,6 +26,11 @@ def _path(prefix, name):
 
 @dataclass(frozen=True, eq=False)
 class Instance:
+    """Handle returned by `Assembly.add`; use its feature and port accessors.
+
+    Instances belong to one assembly. Do not construct them directly or reuse a
+    handle in another assembly. Reuse the underlying Part or Assembly definition.
+    """
     name: str
     part: Part | Purchased | Assembly
     group: str | None
@@ -35,11 +40,30 @@ class Instance:
     explode: tuple = (0, 0, 0)
 
     def feature(self, key):
+        """Reference a named manufacturing feature owned by this instance's definition.
+
+        Args:
+            key (str): Feature name.
+
+        Returns:
+            (FeatureRef): Bound local datum and feature definition.
+
+        Raises:
+            ValueError: The name is absent or the instance is a nested assembly.
+        """
         if isinstance(self.part, Assembly) or key not in self.part.features:
             raise ValueError(f"{self.name}: unknown feature {key!r}")
         return FeatureRef(self, key)
 
     def port(self, key):
+        """Reference a local port or an exported nested-assembly port.
+
+        Args:
+            key (str): Port name.
+
+        Returns:
+            (PortRef): Instance-bound attachment datum.
+        """
         ports = self.part._ports if isinstance(self.part, Assembly) else self.part.ports
         if key not in ports:
             raise ValueError(f"{self.name}: unknown port {key!r}")
@@ -128,11 +152,17 @@ class ToolAccess:
 
 
 class Assembly:
-    """Reusable local assembly whose instances have one placement parent each.
+    """A local assembly graph resolved through explicit frames and relationships.
 
-    Ports describe coincident frames. Revolute coordinates are degrees about Z;
-    slider coordinates are millimetres along Z. Multiple fixed roots are allowed
-    for intentional independent references; ungrounded and cyclic graphs fail.
+    Args:
+        name (str): Stable assembly name without path separators.
+
+    Add instances, fix at least one root, and connect the remaining instances.
+    Each instance has one placement parent. Multiple fixed roots are allowed;
+    cycles, ungrounded instances, and conflicting placements are errors.
+
+    Geometry is built lazily by output methods. This experimental class differs
+    from `cadkit.project.Assembly`, which only groups already placed geometry.
     """
     def __init__(self, name):
         self.name = valid_name(name)
@@ -163,6 +193,19 @@ class Assembly:
         return MappingProxyType(self._ports)
 
     def add(self, name, part, *, group=None, color=None, material=None, explode=(0, 0, 0)):
+        """Add a named instance without placing it or building its geometry.
+
+        Args:
+            name (str): Unique instance name within this assembly.
+            part (Part | Purchased | Assembly): Reusable definition.
+            group (str | None): Manufacturing/display group override.
+            color (tuple | None): RGB display override, each channel from 0 to 1.
+            material (str | None): Rendering material override.
+            explode (tuple): Presentation translation in millimetres.
+
+        Returns:
+            (Instance): Owned handle for fixing, connecting, and referencing features.
+        """
         valid_name(name)
         if not isinstance(part, (Part, Purchased, Assembly)):
             raise TypeError("Assembly instances need a design.Part, Purchased or Assembly definition")
@@ -191,6 +234,18 @@ class Assembly:
         return instance.name in self._fixed or any(c.placing and c.child.instance is instance for c in self._connections.values())
 
     def fix(self, instance, *, at=Frame()):
+        """Ground an instance at an explicit local frame.
+
+        Args:
+            instance (Instance): Handle returned by this assembly's `add`.
+            at (Frame): Placement relative to the assembly origin.
+
+        Returns:
+            (Instance): The same handle, for composition in calling code.
+
+        Raises:
+            ValueError: The instance is foreign or already has a placement parent.
+        """
         self._owned(instance)
         if not isinstance(at, Frame):
             raise TypeError("Fixed placement must be a Frame")
@@ -200,6 +255,12 @@ class Assembly:
         return instance
 
     def export_port(self, name, ref):
+        """Expose an internal datum for connecting this assembly as a reusable subsystem.
+
+        Args:
+            name (str): Unique public port name.
+            ref (PortRef | FeatureRef): Owned instance's port or feature reference.
+        """
         valid_name(name)
         self._ref(ref)
         if name in self._ports:
@@ -208,6 +269,30 @@ class Assembly:
 
     def connect(self, name, relationship, *, parent=None, child=None, through=None, into=None,
                 fastening_name=None, place=True, via=(), description=""):
+        """Connect two instance datums and normally place the child from its parent.
+
+        Args:
+            name (str): Unique connection name.
+            relationship (Rigid | Revolute | Slider | InsertMount | ThreadedMount):
+                Motion relationship or shared mounting recipe.
+            parent (PortRef | None): Parent datum for a motion relationship.
+            child (PortRef | None): Child datum for a motion relationship.
+            through (FeatureRef | None): Mount's clearance-side feature on the child.
+            into (FeatureRef | None): Same mount object's receiver feature on the parent.
+            fastening_name (str | None): Hardware identity; defaults to connection name.
+            place (bool): Whether a mount connection assigns child placement.
+                Prefer `fasten()` for a secondary fastening on already placed parts.
+            via (tuple[FeatureRef, ...]): Middle roles covering the grip continuously.
+                Intermediate instances need their own placement.
+            description (str): Description of a motion connection.
+
+        Returns:
+            (MotionConnection | Connection): Handle usable for poses or tool access.
+
+        Parent and child datums coincide at zero motion. Rotation is in degrees
+        about local Z; sliding is in millimetres along local Z. Mount roles must bind
+        the exact same mount object, not merely equal recipe values.
+        """
         valid_name(name)
         if name in self._connections or name in self._attachments:
             raise ValueError("Duplicate connection or attachment name")
@@ -244,15 +329,34 @@ class Assembly:
         return connection
 
     def fasten(self, name, mount, *, through, into, via=(), fastening_name=None):
-        """Bind matching features on already placed parts without adding a parent."""
+        """Add a mount fastening between already placed instances.
+
+        Args:
+            name (str): Unique connection name.
+            mount (InsertMount | ThreadedMount): Shared recipe used by each role.
+            through (FeatureRef): Outermost clearance-side feature.
+            into (FeatureRef): Receiving insert or threaded feature.
+            via (tuple[FeatureRef, ...]): Intermediate clamped-layer features.
+            fastening_name (str | None): Optional distinct hardware identity.
+
+        Returns:
+            (Connection): Nonplacing connection. Resolution requires all role datums
+                to coincide in the installed assembly.
+        """
         return self.connect(name, mount, through=through, into=into, via=via,
                             fastening_name=fastening_name, place=False)
 
     def attach(self, name, recipe, **features):
-        """Bind hardware to existing owned features, without adding placement.
+        """Bind hardware to existing features without adding a placement edge.
 
-        A captive closure or set screw may act within one physical part; it is
-        a fastening rather than a joint between fabricated components.
+        Args:
+            name (str): Unique attachment and fastening name.
+            recipe (CaptiveNutFastening | SetScrew): Hardware attachment recipe.
+            **features (FeatureRef): `through` and `nut` references for a captive nut, or `thread`
+                and `stop` references for a set screw. Each is an owned FeatureRef.
+
+        Returns:
+            (Attachment): Attachment record. Features can belong to one physical part.
         """
         valid_name(name)
         if name in self._attachments or name in self._connections or any(
@@ -272,10 +376,25 @@ class Assembly:
 
     def interface(self, name, *, left, right, kind="contact", region=None,
                   max_overlap_mm3=0, min_clearance_mm=0, max_gap_mm=None, description=""):
-        """Declare physical contact in this assembly's local coordinates.
+        """Declare contact or clearance between two local leaf instances.
 
-        A bounded overlap region is a local CadQuery builder transformed together
-        with the containing assembly; references must identify leaf components.
+        Args:
+            name (str): Unique interface name.
+            left (Instance): First Part or Purchased instance.
+            right (Instance): Second distinct Part or Purchased instance.
+            kind (str): `contact`, `clearance`, `press_fit`, `threaded`, or `mesh`.
+            region (Callable | None): Native overlap-region builder in this assembly's
+                coordinates; it transforms with the containing assembly.
+            max_overlap_mm3 (float): Permitted overlap within the bounded region.
+            min_clearance_mm (float): Required minimum separation in millimetres.
+            max_gap_mm (float | None): Maximum permitted gap; contact defaults to 0.001.
+            description (str): Physical intent of the interface.
+
+        Returns:
+            (Contact): Local declaration resolved into a stable Interface for validation.
+
+        Nested assembly handles are not leaf contact participants. Declare the
+        contact in the assembly owning the relevant leaves.
         """
         valid_name(name)
         for instance in (left, right):
@@ -291,10 +410,23 @@ class Assembly:
         return contact
 
     def access(self, name, *, connection, envelope, obstacles, at=Frame(), description=""):
-        """Bind a tool envelope to a fastening's receiver datum in every pose.
+        """Check a complete tool envelope relative to a fastening's receiving datum.
 
-        The builder supplies the complete swept tool shape in datum coordinates.
-        Obstacles are explicit local instances, including entire subassemblies.
+        Args:
+            name (str): Unique tool-access name.
+            connection (Connection | str): Local mount connection handle or name.
+            envelope (Callable): Zero-argument native builder for the complete swept
+                tool solid in receiving-datum coordinates.
+            obstacles (tuple[Instance, ...]): Explicit local obstacles, including
+                whole subassemblies when appropriate.
+            at (Frame): Additional placement relative to the receiving datum.
+            description (str): Tool and operation being checked.
+
+        Returns:
+            (ToolAccess): Declaration that follows the fastening in every pose.
+
+        Only the supplied envelope and obstacle set are checked. The library does
+        not infer a tool path or a complete assembly sequence.
         """
         valid_name(name)
         if name in self._access:
@@ -314,7 +446,19 @@ class Assembly:
         return result
 
     def driver_access(self, name, *, connection, diameter, length, obstacles):
-        """Straight driver probes at every screw seat, along outward datum Z."""
+        """Add a straight cylindrical driver probe at every screw seat.
+
+        Args:
+            name (str): Unique tool-access name.
+            connection (Connection | str): Local mount connection handle or name.
+            diameter (float): Positive probe diameter in millimetres.
+            length (float): Positive outward probe length in millimetres.
+            obstacles (tuple[Instance, ...]): Explicit instances to check for obstruction.
+
+        Returns:
+            (ToolAccess): Access declaration extending from the screw seats along
+                the receiving datum's outward +Z direction.
+        """
         from .frames import positive
         positive(diameter, "Driver diameter")
         positive(length, "Driver access length")
@@ -343,7 +487,18 @@ class Assembly:
         return key
 
     def couple(self, name, *, driver, driven, ratio, offset=0):
-        """Derive driven = driver * ratio + offset; units follow each joint."""
+        """Derive one joint coordinate as `driven = driver * ratio + offset`.
+
+        Args:
+            name (str): Unique coupling name.
+            driver (str | MotionConnection): Driving joint handle or scoped path.
+            driven (str | MotionConnection): Joint whose coordinate is derived.
+            ratio (float): Finite multiplier; units follow the two joint coordinates.
+            offset (float): Finite offset in the driven joint's units.
+
+        Returns:
+            (Coupling): Coupling record. A joint can have only one driver.
+        """
         valid_name(name)
         if name in self._couplings:
             raise ValueError("Duplicate coupling name")
@@ -359,6 +514,16 @@ class Assembly:
         return coupling
 
     def name_pose(self, name, positions):
+        """Register a named set of scalar joint positions without changing the default pose.
+
+        Args:
+            name (str): Unique pose name.
+            positions (dict): Motion connection handles or scoped joint paths mapped
+                to values in degrees for revolute joints and millimetres for sliders.
+
+        Returns:
+            (Assembly): This assembly, allowing chained definitions.
+        """
         valid_name(name)
         if name in self._poses:
             raise ValueError("Duplicate pose name")
@@ -368,6 +533,15 @@ class Assembly:
         return self
 
     def pose(self, positions):
+        """Freeze this definition and resolve a reusable pose selection.
+
+        Args:
+            positions (dict | str): Position mapping or previously registered pose name.
+
+        Returns:
+            (AssemblyPose): Snapshot whose output methods use the selected positions.
+                Later changes to the assembly graph do not alter the snapshot.
+        """
         values = self._normalize_pose(positions)
         self._positions(values)
         return AssemblyPose(self._snapshot(), values)
@@ -474,7 +648,15 @@ class Assembly:
         return result
 
     def locations(self, *, at=Frame(), pose=None):
-        """Resolve immediate instance locations without building geometry."""
+        """Resolve immediate instance locations without building geometry.
+
+        Args:
+            at (Frame): Placement of this assembly in its caller's coordinates.
+            pose (dict | str | None): Joint positions, named pose, or defaults.
+
+        Returns:
+            (dict[str, cq.Location]): Immediate instance names mapped to native locations.
+        """
         positions = self._positions(self._normalize_pose(pose))
         return {name: at.location * location for name, location in self._locations("", positions).items()}
 
@@ -495,19 +677,70 @@ class Assembly:
         return Resolution(self, positions, assemblies, leaves)
 
     def fastenings(self, *, at=Frame(), pose=None):
+        """Resolve installed fastenings from this graph and its selected pose.
+
+        Args:
+            at (Frame): Placement of this assembly.
+            pose (dict | str | None): Joint positions or named pose.
+
+        Returns:
+            (tuple[Fastening, ...]): Stable mechanical declarations in world coordinates.
+        """
         return self._resolve(at=at, pose=pose).fastenings()
 
     def joints(self, *, at=Frame(), pose=None):
+        """Resolve installed joints from this graph and its selected pose.
+
+        Args:
+            at (Frame): Placement of this assembly.
+            pose (dict | str | None): Joint positions or named pose.
+
+        Returns:
+            (tuple[Joint, ...]): Stable mechanical declarations in world coordinates.
+        """
         return self._resolve(at=at, pose=pose).joints()
 
     def interfaces(self, *, at=Frame(), pose=None):
+        """Resolve installed interfaces from this graph and its selected pose.
+
+        Args:
+            at (Frame): Placement of this assembly.
+            pose (dict | str | None): Joint positions or named pose.
+
+        Returns:
+            (tuple[Interface, ...]): Stable mechanical declarations in world coordinates.
+        """
         return self._resolve(at=at, pose=pose).interfaces()
 
     def components(self, *, at=Frame(), pose=None, include_hardware=False, kind=None):
+        """Build flattened installed Components from the resolved graph.
+
+        Args:
+            at (Frame): Placement of the assembly.
+            pose (dict | str | None): Joint positions or named pose.
+            include_hardware (bool): Include generated fastening hardware.
+            kind (str | None): Restrict leaves to `manufactured` or `purchased`.
+
+        Returns:
+            (list[cadkit.project.Component]): Located Components in world millimetres.
+        """
         return self._resolve(at=at, pose=pose).components(include_hardware=include_hardware, kind=kind)
 
     def models(self, *, kind=None, names="leaf", at=Frame(), pose=None):
-        """Native Workplanes keyed by leaf names or unambiguous relative paths."""
+        """Build native Workplanes keyed by instance names or relative paths.
+
+        Args:
+            kind (str | None): `manufactured`, `purchased`, or all definitions.
+            names (str): `leaf` for unique leaf names, or `path` for scoped identities.
+            at (Frame): Placement of the assembly.
+            pose (dict | str | None): Joint positions or named pose.
+
+        Returns:
+            (dict[str, cq.Workplane]): Native models; generated hardware is excluded.
+
+        Raises:
+            ValueError: Leaf names are ambiguous; request `names="path"` instead.
+        """
         if kind not in {None, "manufactured", "purchased"} or names not in {"leaf", "path"}:
             raise ValueError("models expects kind manufactured/purchased and names leaf/path")
         result = {}
@@ -519,7 +752,15 @@ class Assembly:
         return result
 
     def purchased_bom(self):
-        """Instance quantities of purchased definitions, independent of pose."""
+        """Aggregate quantities of purchased definitions independently of pose.
+
+        Returns:
+            (tuple[dict, ...]): Rows keyed by definition name, supplier and SKU,
+                containing total quantity and relative instance paths.
+
+        Each instance contributes its definition's quantity. Fastener hardware is
+        counted separately by the stable hardware BOM.
+        """
         rows = {}
         for prefix, assembly in self._walk():
             for instance in assembly._instances.values():
@@ -533,10 +774,18 @@ class Assembly:
         return tuple(rows.values())
 
     def embed(self, *, at=Frame(), pose=None):
-        """Expose a frozen subsystem through the stable, flat Project contract.
+        """Freeze a subsystem for inclusion in a hand-authored stable Project.
 
-        Leaf names must be unique. All geometry and mechanics are resolved by
-        this library; consumers do not reconstruct placements or hardware.
+        Args:
+            at (Frame): Installed placement of this subsystem.
+            pose (dict | str | None): Selected positions or named pose.
+
+        Returns:
+            (Embedding): Adapter exposing mutually consistent components, Parts,
+                joints, interfaces, fastenings and purchased quantities.
+
+        Raises:
+            ValueError: Leaf names are ambiguous; use a nested design Assembly instead.
         """
         values = self._normalize_pose(pose)
         result = Embedding(self._snapshot(), at, values)
@@ -544,9 +793,31 @@ class Assembly:
         return result
 
     def as_assembly(self, *, at=Frame(), pose=None, include_hardware=True, kind=None):
+        """Build a placed cadkit.project.Assembly hierarchy.
+
+        Args:
+            at (Frame): Placement of this assembly.
+            pose (dict | str | None): Joint positions or named pose.
+            include_hardware (bool): Include located fastening hardware.
+            kind (str | None): `manufactured`, `purchased`, or all leaves.
+
+        Returns:
+            (cadkit.project.Assembly): Hierarchy with native geometry, names, and colors.
+        """
         return self._resolve(at=at, pose=pose).as_assembly(include_hardware=include_hardware, kind=kind)
 
     def as_cq_assembly(self, *, at=Frame(), pose=None, include_hardware=True, kind=None):
+        """Build a placed cq.Assembly hierarchy.
+
+        Args:
+            at (Frame): Placement of this assembly.
+            pose (dict | str | None): Joint positions or named pose.
+            include_hardware (bool): Include located fastening hardware.
+            kind (str | None): `manufactured`, `purchased`, or all leaves.
+
+        Returns:
+            (cq.Assembly): Hierarchy with native geometry, names, and colors.
+        """
         def convert(tree):
             result = cq.Assembly(name=tree.name)
             for child in tree.children:
@@ -620,13 +891,31 @@ class Assembly:
         return frozen
 
     def as_project(self, *, parameters=(), checks=(), description="", pose=None):
-        """Snapshot into Cadkit's tooling contract; native definitions stay local."""
+        """Freeze the definition into the stable CLI and desktop Project contract.
+
+        Args:
+            parameters (tuple): Stable Parameter metadata.
+            checks (tuple): Stable Check definitions.
+            description (str): Project description.
+            pose (dict | str | None): Joint positions or named pose for the default view.
+
+        Returns:
+            (cadkit.project.Project): Adapter with manufactured Parts, installed tree,
+                mechanics, and named poses. Repeated manufactured definitions contribute
+                instance quantities; purchased components stay outside the print registry.
+        """
         values = self._normalize_pose(pose)
         return DesignProject(self._snapshot(), values, parameters=parameters, checks=checks, description=description)
 
 
 @dataclass(frozen=True)
 class AssemblyPose:
+    """Immutable pose selection over a snapshot of an authoring graph.
+
+    Obtain this with `assembly.pose(positions)`. Its output methods forward to
+    the matching Assembly method with the selected pose. Pass placement and
+    filtering options as usual; supplying another `pose` option is rejected.
+    """
     _assembly: Assembly = field(repr=False)
     positions: dict
 
@@ -893,7 +1182,13 @@ class DesignProject(Project):
 
 @dataclass(frozen=True)
 class Embedding:
-    """Frozen leaf-name adapter for embedding a design in an existing Project."""
+    """Frozen subsystem adapter for a hand-authored stable Project.
+
+    Obtain this with `assembly.embed()`. Methods expose components, manufacturing
+    parts, and installed mechanics with consistent references. Leaf names must
+    be unique. Use its methods together rather than rebuilding transforms in
+    the containing project.
+    """
     _definition: Assembly = field(repr=False)
     at: Frame
     pose: dict

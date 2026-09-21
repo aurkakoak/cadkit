@@ -13,6 +13,19 @@ def _key(value):
 
 
 def memoize_shape(fn):
+    """Cache up to 128 argument combinations of a pure geometry builder.
+
+    Args:
+        fn (Callable): Builder whose output depends only on explicit arguments.
+
+    Returns:
+        (Callable): Decorated builder with a `cache_clear()` method. Nested lists
+            and dictionaries are converted to stable hashable keys.
+
+    The cached object itself is returned, not a copy. Do not mutate it. Changing
+    module globals does not invalidate entries; pass design inputs explicitly
+    or call `cache_clear()` after changing them.
+    """
     cached = lru_cache(maxsize=128)(fn)
 
     @wraps(fn)

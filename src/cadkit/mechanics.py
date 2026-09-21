@@ -18,6 +18,24 @@ from .fasteners import FastenerSpec, HardwareItem, FastenerSite, vector
 
 @dataclass(frozen=True)
 class Joint:
+    """A declared relationship between already installed components.
+
+    Args:
+        name: Unique joint name.
+        components: At least two distinct component names or full assembly paths.
+        kind: `rigid`, `revolute`, or `slider`.
+        origin: Installed joint origin in world millimetres.
+        axis: Installed motion axis, normalized on construction.
+        limits: Optional inclusive coordinate limits, in degrees for revolute
+            motion or millimetres for sliders.
+        position: Declared installed coordinate in the corresponding units.
+        interfaces: Related Interface names.
+        fastenings: Related Fastening names.
+        description: Human-readable intent.
+
+    Stable Joint metadata does not move geometry. For pose-driven placement,
+    use declarative Assembly connections.
+    """
     name: str
     components: tuple[str, ...]
     kind: str = "rigid"
@@ -50,6 +68,24 @@ class Joint:
 
 @dataclass(frozen=True)
 class Interface:
+    """A bounded contact or clearance contract between two installed components.
+
+    Args:
+        name: Unique interface name.
+        components: Exactly two component names or full paths.
+        kind: `contact`, `clearance`, `press_fit`, `threaded`, or `mesh`.
+        region: Lazy native solid in world millimetres delimiting allowed overlap.
+            Required whenever `max_overlap_mm3` is positive.
+        max_overlap_mm3: Maximum permitted native intersection volume inside
+            the region. It cannot be positive for a clearance interface.
+        min_clearance_mm: Minimum required separation in millimetres.
+        max_gap_mm: Maximum allowed distance in millimetres. Contact interfaces
+            replace `None` with 0.001; other kinds may leave it unspecified.
+        description: Explanation of the intended fit or contact.
+
+    Values must be nonnegative when supplied. Permitting overlap does not
+    excuse collisions outside the specified region.
+    """
     name: str
     components: tuple[str, str]
     kind: str = "contact"
@@ -83,10 +119,17 @@ class Interface:
 
 @dataclass(frozen=True)
 class AccessEnvelope:
-    """A solid tool/insertion envelope in world mm against explicit obstacles.
+    """A complete swept tool or insertion solid checked against explicit obstacles.
 
-    Callers include the entire swept tool shape, not just its centre line. This
-    proves clearance only for that envelope and that obstacle set.
+    Args:
+        name: Unique access name within a fastening.
+        envelope: Lazy native solid in installed world millimetres, including
+            the whole swept tool body, not only a centre line.
+        obstacles: Explicit component references to test against the envelope.
+        description: The intended tool, direction, and assembly operation.
+
+    An omitted envelope records unverified access. A supplied envelope proves
+    only this geometry against this obstacle set in the installed pose.
     """
     name: str
     envelope: Callable[[], cq.Shape] | None = field(default=None, repr=False, compare=False)
@@ -100,6 +143,30 @@ class AccessEnvelope:
 
 @dataclass(frozen=True)
 class Fastening:
+    """Repeated located hardware and explicit grip/engagement requirements.
+
+    Args:
+        name: Unique fastening name.
+        components: One or more distinct participating component references.
+        sites: Installed axes where the entire hardware stack is repeated.
+        hardware: Named HardwareItems, each with an axial offset.
+        joint: Associated Joint name, if this fastening secures a joint.
+        kind: `through`, `tapped`, or `insert`.
+        grip_mm: Clamped stack thickness along the screw axis.
+        thread_depth_mm: Available thread engagement depth.
+        min_engagement_mm: Minimum required screw engagement.
+        hole_depth_mm: Total receiving depth for blind-hole tip-clearance checks.
+        min_tip_clearance_mm: Required free depth beyond the screw tip.
+        access: Explicit swept tool/access checks.
+        insertion_distance_mm: Outward distance for the presentation preview.
+        description: Human-readable assembly intent.
+        quantity: Positive BOM count for unlocated hardware, or a count matching
+            the number of sites when sites are present.
+        thread_size: Explicit receiving thread designation, when known.
+
+    Unknown dimensions remain `None` and related checks remain unverified.
+    A BOM quantity without sites does not establish hardware placement.
+    """
     name: str
     components: tuple[str, ...]
     sites: tuple[FastenerSite, ...] = ()
@@ -205,6 +272,15 @@ def hardware_assembly(fastenings):
 
 
 def hardware_bom(fastenings):
+    """Aggregate hardware quantities by FastenerSpec identity without building shapes.
+
+    Args:
+        fastenings (tuple[Fastening, ...]): Located or quantity-only hardware declarations.
+
+    Returns:
+        (list[dict]): Specification, quantity, associated fastening IDs, and whether
+            all contributions are located.
+    """
     rows = {}
     for fastening in fastenings:
         for item in fastening.hardware:
@@ -267,10 +343,22 @@ def _memoized_geometry_query(query):
 
 
 def validate_mechanics(project, assembly=None, *, scan_collisions=True, tolerance_mm3=1e-5):
-    """Validate geometry and declared limits; never claim universal assemblability.
+    """Validate installed collisions and the project's declared mechanical contracts.
 
-    Distances are needed only for declared interfaces. A failed distance query
-    leaves interface fit unverified without invalidating native collision evidence.
+    Args:
+        project (cadkit.project.Project): Project containing declarations.
+        assembly (cadkit.project.Assembly | None): Reuse installed geometry, or
+            build the project's default assembly.
+        scan_collisions (bool): Scan undeclared native component intersections.
+            Disabling this leaves collision coverage unverified.
+        tolerance_mm3 (float): Volume tolerance for native overlap checks.
+
+    Returns:
+        (dict): Schema-versioned report with overall `pass`, `fail`, or
+            `incomplete`, findings, summary counts, and coverage information.
+
+    Mesh-dependent checks, unknown supplier dimensions, unspecified tool access,
+    and unmodelled motion sweeps are reported as unverified where relevant.
     """
     if tolerance_mm3 <= 0 or not math.isfinite(tolerance_mm3):
         raise ValueError("Collision tolerance must be positive and finite")

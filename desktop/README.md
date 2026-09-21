@@ -9,7 +9,7 @@ switch updates the viewport too and remembers the choice.
 
 The release pipeline builds macOS Apple Silicon and Intel DMG/ZIP downloads
 and Linux x64/ARM64 tarballs, with Python and CAD dependencies included.
-See [installation](../docs/install.md) and [release builds](../docs/releases.md).
+See [installation](../docs/how-to/install.md) and [release builds](../docs/contributing/releases.md).
 Opening the installed app creates an editable bracket project in the app's
 user-data directory. Existing edits survive later launches and upgrades.
 
@@ -32,7 +32,7 @@ a custom environment if your project requires additional packages; install
 package layout must be installed in that custom environment or supplied
 through `PYTHONPATH` with the `--python` override.
 
-For a supplied trial source bundle, follow its `docs/install.md` to install
+For a supplied trial source bundle, follow its `docs/how-to/install.md` to install
 the Python wheel and copy a writable desktop runtime.
 
 ## Run from source
@@ -106,7 +106,7 @@ Hardware has All/Selected/Hidden visibility and a reversible assembly preview.
 Measurements use installed geometry; return the preview to zero before measuring.
 Run assembly checks here or review the selected Part set before printing.
 Known failures require an explicit override reason, stored with exported artifacts.
-Unverified coverage remains visible. See [mechanical contracts](../docs/mechanics.md)
+Unverified coverage remains visible. See [mechanical contracts](../docs/reference/mechanics.md)
 for modelling, validation limits, and the four dedicated MCP tools.
 
 ## MCP: connect an external agent

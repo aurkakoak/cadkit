@@ -11,7 +11,37 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import tomllib
+
+
+def expand_tutorial_examples(content: str, source: Path) -> str:
+    """Expand the book's example-file/section includes for offline Markdown."""
+    def expand(match):
+        filename, _, section = match[2].partition(":")
+        example = (source / filename).resolve()
+        if not example.is_relative_to(source / "examples") or not example.is_file():
+            raise ValueError(f"Invalid tutorial include: {match[2]}")
+        lines = []
+        active = not section
+        found = not section
+        for line in example.read_text().splitlines():
+            marker = re.fullmatch(r"\s*# --8<-- \[(start|end):([^\]]+)\]\s*", line)
+            if marker:
+                if section and marker[2] == section:
+                    active = marker[1] == "start"
+                    found = True
+                continue
+            if active:
+                lines.append(line)
+        if not found or (section and active):
+            raise ValueError(f"Missing or unclosed tutorial section: {match[2]}")
+        excerpt = "\n".join(lines).strip("\n")
+        if section:
+            excerpt = textwrap.dedent(excerpt)
+        return textwrap.indent(excerpt, match[1])
+
+    return re.sub(r'^([ \t]*)--8<-- "([^"]+)"[ \t]*$', expand, content, flags=re.MULTILINE)
 
 
 def main():
@@ -50,33 +80,36 @@ def main():
         wheel, = (root / "python").glob("*.whl")
         shutil.copytree(source / "examples", root / "examples",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        shutil.copytree(source / "tests", root / "tests",
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        # Consumer trials run library/example tests. Repository release and
+        # documentation tooling tests require a source checkout, not a wheel.
+        shutil.copytree(source / "tests", root / "tests", ignore=shutil.ignore_patterns(
+            "__pycache__", "*.pyc", "test_release.py", "test_documentation.py"))
         shutil.copytree(source / "desktop", root / "desktop", ignore=shutil.ignore_patterns(
             "node_modules", "dist", "bundle", "release", "test-results", "playwright-report", ".DS_Store"))
         shutil.copytree(source / "skill", root / "skills" / "cadkit")
-        docs = root / "docs"
-        docs.mkdir()
-        for document in sorted((source / "docs").glob("*.md")):
-            if not document.name.endswith(".local.md"):
-                shutil.copy2(document, docs / document.name)
-        if (source / "docs" / "assets").exists():
-            shutil.copytree(source / "docs" / "assets", docs / "assets")
+        # Trials carry the human book's nested sources and agent references
+        # independently. Never include local drafts in either distribution.
+        shutil.copytree(source / "docs", root / "docs",
+                        ignore=shutil.ignore_patterns("*.local.md"))
         shutil.copy2(source / "scripts" / "install_trial.py", root / "install.py")
         (root / "START-HERE.md").write_text(
             f"# {release_id}\n\n"
-            "Start with [installation](docs/install.md). This bundle contains a Python wheel, "
+            "Start with [installation](docs/how-to/install.md). This bundle contains a Python wheel, "
             "a separate desktop runtime, a portable agent skill, an independent example and tests.\n\n"
             "Verify it with `python3 install.py verify`. Install the skill with "
             "`python3 install.py skill --project /path/to/consumer`. "
             "Neither command installs runtime dependencies.\n\n"
-            "Use [migration](docs/migration.md), [API](docs/api.md), "
-            "[workflows](docs/workflows.md), [desktop/MCP](desktop/README.md) and "
-            "[contracts](docs/contracts.md) as needed. "
+            "Use the [tutorial](docs/tutorials/index.md), [guides](docs/how-to/index.md), "
+            "[API reference](https://aurkakoak.github.io/cadkit/docs/reference/), "
+            "[desktop/MCP](desktop/README.md) and "
+            "[contracts](docs/reference/contracts.md) as needed. "
             "Release checksums identify content; no hosted registry is required.\n"
         )
         for doc in root.rglob("*.md"):
-            for target in re.findall(r"\]\(([^)]+)\)", doc.read_text()):
+            # Trial tutorials remain readable without the MkDocs snippet plugin.
+            content = expand_tutorial_examples(doc.read_text(), source)
+            doc.write_text(content)
+            for target in re.findall(r"\]\(([^)]+)\)", content):
                 if "://" in target or target.startswith("#"):
                     continue
                 if not (doc.parent / target.split("#")[0]).exists():

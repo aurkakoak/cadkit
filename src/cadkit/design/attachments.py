@@ -19,7 +19,18 @@ def _delta(left,right):
 
 @dataclass(frozen=True)
 class CaptiveNutFastening:
-    """A screw through an owned hole into an owned, opposing nut pocket."""
+    """Bind a headed screw through a Hole to an opposing NutPocket.
+
+    Args:
+        screw: Headed screw specification with explicit length.
+        nut: Hex-nut specification with the same thread size.
+        nut_thickness: Explicit nut thickness in millimetres.
+
+    Use `assembly.attach(name, recipe, through=..., nut=...)`. Features must be
+    individually named, coaxial, and have opposing entry directions; patterns
+    are not supported. The pocket must fit the declared nut thickness.
+    This adds hardware and bounded thread intent without changing placement.
+    """
     feature_roles: ClassVar[tuple[str, ...]] = ("through", "nut")
     screw: FastenerSpec
     nut: FastenerSpec
@@ -84,7 +95,17 @@ class CaptiveNutFastening:
 
 @dataclass(frozen=True)
 class SetScrew:
-    """A radial set screw whose tip stops at an owned D-bore's flat plane."""
+    """Bind a radial set screw to a TappedHole and the flat of a DBore.
+
+    Args:
+        screw: FastenerSpec with `kind="set_screw"` and explicit length.
+        minimum_engagement: Required engagement in millimetres, if known.
+
+    Use `assembly.attach(name, recipe, thread=..., stop=...)`. The individually
+    named pilot points toward the D-flat and determines the screw axis. The
+    tip is placed on the finite flat plane. Actual retention and shaft fit
+    remain unverified; patterns are not supported.
+    """
     feature_roles: ClassVar[tuple[str, ...]] = ("thread", "stop")
     screw: FastenerSpec
     minimum_engagement: float | None = None

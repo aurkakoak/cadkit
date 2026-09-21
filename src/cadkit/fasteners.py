@@ -41,6 +41,26 @@ def vector(value, name="vector", *, unit=False):
 
 @dataclass(frozen=True)
 class FastenerSpec:
+    """An immutable catalogue or supplier specification for simplified hardware.
+
+    Args:
+        kind: Supported fastener kind; see the catalogue table in the reference.
+        size: Provider thread/size designation, such as `M3-0.5`.
+        standard: Provider catalogue type; an empty string selects the kind's default.
+        length_mm: Positive screw length; also explicitly supplied for insert
+            engagement contracts. Nuts and washers normally omit it.
+        manufacturer: Supplier identity for BOM aggregation.
+        part_number: Supplier identifier for BOM aggregation.
+        description: Human-readable notes; these do not change the stable spec ID.
+        representation: `catalogue` for provider geometry or `envelope` for
+            approximate supplier geometry.
+        factory: Optional callable receiving this specification and returning a
+            valid native Shape. Custom dimensions may be unavailable.
+
+    Building never cuts host parts. Hardware has simplified geometry, not
+    helical threads. Countersunk screws are currently rejected because their
+    head-inclusive length differs from the under-head insertion convention.
+    """
     kind: str
     size: str
     standard: str = ""
@@ -67,6 +87,7 @@ class FastenerSpec:
 
     @property
     def id(self):
+        """Return a deterministic hardware identity derived from specification fields, excluding notes."""
         identity = self.describe(include_id=False)
         identity.pop("description")  # Notes do not create a different purchased item.
         return "hardware-" + sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
@@ -120,13 +141,34 @@ class FastenerSpec:
                 "clearance_diameters_mm": getattr(item, "clearance_hole_diameters", None)}
 
     def clearance_diameter(self, fit="Normal"):
+        """Read a clearance-hole diameter from the provider catalogue.
+
+        Args:
+            fit (str): Catalogue fit key, normally `Close`, `Normal`, or `Loose`.
+
+        Returns:
+            (float): Nominal clearance diameter in millimetres.
+
+        Raises:
+            ValueError: The requested key is absent from the provider's table.
+        """
         diameters = self.catalogue().clearance_hole_diameters
         if fit not in diameters:
             raise ValueError(f"Unknown clearance fit {fit!r}; choose {tuple(diameters)}")
         return float(diameters[fit])
 
     def clearance_cutter(self, depth_mm, *, fit="Normal", allowance_mm=0):
-        """Explicit +Z hole cutter; allowance is diametral and authored by caller."""
+        """Build an explicit cylinder along positive local Z.
+
+        Args:
+            depth_mm (float): Positive cutting depth in millimetres.
+            fit (str): Provider clearance fit key.
+            allowance_mm (float): Caller-chosen diametral allowance added to the
+                catalogue diameter; the resulting diameter must stay positive.
+
+        Returns:
+            (cq.Shape): Native cutter with its bottom at the local origin.
+        """
         if not math.isfinite(depth_mm) or depth_mm <= 0 or not math.isfinite(allowance_mm):
             raise ValueError("Cutter depth must be positive and allowance finite")
         diameter = self.clearance_diameter(fit) + allowance_mm
@@ -135,12 +177,26 @@ class FastenerSpec:
         return cq.Solid.makeCylinder(diameter / 2, depth_mm)
 
     def build(self):
+        """Build native hardware in CadKit's insertion coordinates.
+
+        Returns:
+            (cq.Shape): Screw shaft along +Z and head along -Z, with its under-head
+                seat at Z=0. A set screw starts at its drive-end plane; nuts and
+                washers start at Z=0. No installed placement is applied.
+        """
         model = cq.Shape.cast(self.catalogue().wrapped)
         return model.rotate((0, 0, 0), (1, 0, 0), 180) if self.kind.endswith("screw") else model
 
 
 @dataclass(frozen=True)
 class HardwareItem:
+    """One named item in the hardware stack repeated at each FastenerSite.
+
+    Args:
+        name: Unique role within the fastening, such as `screw` or `washer`.
+        spec: Reusable hardware specification.
+        offset_mm: Translation along the site's insertion axis in millimetres.
+    """
     name: str
     spec: FastenerSpec
     offset_mm: float = 0
@@ -155,6 +211,15 @@ class HardwareItem:
 
 @dataclass(frozen=True)
 class FastenerSite:
+    """An installed fastening axis and optional rotational clocking datum.
+
+    Args:
+        name: Unique site name within the fastening.
+        origin: Hardware reference seat in world millimetres.
+        axis: Insertion direction; normalized on construction.
+        x_axis: Optional local X direction perpendicular to the insertion axis,
+            for deterministic clocking of hexagons or other nonround hardware.
+    """
     name: str
     origin: tuple[float, float, float] = (0, 0, 0)
     axis: tuple[float, float, float] = (0, 0, 1)
@@ -171,6 +236,15 @@ class FastenerSite:
                 raise ValueError("Fastener x_axis must be perpendicular to its insertion axis")
 
     def place(self, model, offset_mm=0):
+        """Transform local hardware or a cutter into installed coordinates.
+
+        Args:
+            model (cq.Shape): Shape authored along local +Z.
+            offset_mm (float): Additional translation along the insertion axis.
+
+        Returns:
+            (cq.Shape): Located native geometry.
+        """
         if self.x_axis is not None:
             origin = tuple(p+a*offset_mm for p,a in zip(self.origin,self.axis))
             return model.moved(cq.Location(cq.Plane(origin,xDir=self.x_axis,normal=self.axis)))

@@ -56,4 +56,4 @@ npx skills add aurkakoak/cadkit --skill cadkit
 ```
 
 [Documentation](https://aurkakoak.github.io/cadkit/docs/) ·
-[Run from source](docs/install.md) · [Release process](docs/releases.md)
+[Run from source](docs/how-to/install.md) · [Release process](docs/contributing/releases.md)

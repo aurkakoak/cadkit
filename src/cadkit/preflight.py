@@ -4,7 +4,22 @@ from .mechanics import component_index, resolve_components
 
 
 def scoped_report(report, assembly, parts, *, fastenings):
-    """Keep the requested Parts and their fastening hardware in full assembly context."""
+    """Scope findings to selected Parts while preserving the full installed context.
+
+    Args:
+        report (dict): Complete installed mechanical report.
+        assembly (cadkit.project.Assembly): Corresponding installed hierarchy.
+        parts (list): Requested stable manufacturing Parts.
+        fastenings (tuple): Declarations used to include their related hardware.
+
+    Returns:
+        (dict): Copied report with selected Part/component/hardware/fastening IDs
+            in `scope`. Global reference and coverage errors remain included.
+
+    Parts with no installed instance produce an unverified coverage finding.
+    Removing unrelated findings does not turn incomplete global coverage into
+    a complete passing report.
+    """
     names = {p.name for p in parts}
     index = component_index(assembly)
     part_ids = {path for path, node in index.items() if node.part in names}
@@ -49,6 +64,20 @@ def scoped_report(report, assembly, parts, *, fastenings):
 
 
 def reviewed_report(report, validation_override=None):
+    """Copy a mechanical report and enforce the confirmed-failure export gate.
+
+    Args:
+        report (dict): Mechanical validation report.
+        validation_override (str | None): Explicit reason, 3–1000 characters
+            after trimming, retained as `accepted_with_findings` metadata.
+
+    Returns:
+        (dict): Copied report, with override metadata when supplied.
+
+    Raises:
+        ValueError: Override reason is invalid, or report status is `fail`
+            without an explicit override.
+    """
     result = deepcopy(report)
     if validation_override is not None:
         if not isinstance(validation_override, str) or not 3 <= len(validation_override.strip()) <= 1000:

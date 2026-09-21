@@ -9,6 +9,15 @@ from .frames import Frame, name
 
 
 class Feature(Protocol):
+    """Protocol for a named operation owned by one declarative Part.
+
+    Attributes:
+        at: Local manufacturing datum.
+
+    `apply(body)` returns a native CadQuery solid. `describe()` returns
+    JSON-compatible feature metadata, optionally including manufacturing
+    `operations`. Features run in mapping insertion order.
+    """
     at: Frame
 
     def apply(self, body: cq.Shape) -> cq.Shape: ...
@@ -17,6 +26,13 @@ class Feature(Protocol):
 
 @dataclass(frozen=True)
 class FDM:
+    """Manufacturing metadata for a fused-deposition printed part.
+
+    Args:
+        material: Explicit material name; use `unspecified` when unknown.
+        print_rotation: Finite X, Y, Z angles in degrees. Applied only by the
+            stable Part adapter for fabrication, never during local assembly placement.
+    """
     material: str
     print_rotation: tuple = (0, 0, 0)
 
@@ -34,7 +50,15 @@ class FDM:
 
 @dataclass(frozen=True)
 class LaserCut:
-    """A planar blank cut from explicitly dimensioned sheet stock."""
+    """A native blank cut from explicitly dimensioned sheet stock.
+
+    Args:
+        material: Sheet material name; use `unspecified` when unknown.
+        thickness: Positive sheet thickness in millimetres, along local Z.
+
+    Validation compares the final body's Z extent with `thickness`. It does not
+    prove constant cross-section or generate a machine-ready cutting toolpath.
+    """
     material: str
     thickness: float
     print_rotation: tuple = field(default=(0, 0, 0), init=False)
@@ -66,6 +90,21 @@ def native(body):
 
 @dataclass(frozen=True)
 class Part:
+    """An immutable local definition with owned features and attachment ports.
+
+    Args:
+        name: Stable artifact name using letters, numbers, `_` and `-`.
+        body: Zero-argument builder returning one valid native solid or an
+            explicit native compound. Mesh bodies are not accepted.
+        manufacture: Explicit `FDM` or `LaserCut` manufacturing metadata.
+        features: Named feature objects, applied in mapping insertion order.
+        ports: Named local Frames for composition; these do not cut geometry.
+        finalize: Optional callable receiving the featured Shape and returning
+            a native result, for operations such as final edge finishing.
+
+    Mappings are copied and exposed read-only. Building starts with a copy of
+    the body's native shape. Use `as_part` to enter the stable Project API.
+    """
     name: str
     body: Callable
     manufacture: FDM | LaserCut
@@ -96,6 +135,7 @@ class Part:
         return body
 
     def describe(self):
+        """Return manufacturing, feature, port, and operation metadata without building the body."""
         features = {key: feature.describe() for key, feature in self.features.items()}
         return {"schema_version": 1, "name": self.name,
                 "manufacture": self.manufacture.describe(), "features": features,
@@ -106,7 +146,17 @@ class Part:
 
 
     def as_part(self, group, *, quantity=1, notes="", production=True):
-        """Keep existing CLI, desktop, export and print-orientation behavior."""
+        """Adapt this local definition to the stable manufacturing Part contract.
+
+        Args:
+            group (str): Manufacturing group.
+            quantity (int): Positive manufacturing quantity.
+            notes (str): Markdown manufacturing notes.
+            production (bool): Include in the stable `all` selection.
+
+        Returns:
+            (cadkit.project.Part): Lazy adapter preserving feature metadata and print rotation.
+        """
         return _PartAdapter(self.name, self.build, group, quantity=quantity,
                             material=self.manufacture.material, notes=notes,
                             print_rotation=self.manufacture.print_rotation,

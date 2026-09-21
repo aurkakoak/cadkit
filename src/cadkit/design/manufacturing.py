@@ -42,6 +42,19 @@ def _cylinder(diameter, depth, at, point, *, through=False):
 
 @dataclass(frozen=True)
 class Hole:
+    """A circular blind or through hole at one or more local sites.
+
+    Args:
+        diameter: Finished hole diameter in millimetres.
+        depth: Positive cutting depth in millimetres from the entry datum.
+        at: Entry-face frame whose +Z points into material.
+        pattern: PointPattern or PolarPattern; `None` means one hole at the origin.
+        through: Extend the exit by 0.1 mm to clear a face at the declared depth.
+            A through hole still needs an explicit depth covering the material.
+
+    The entry extends 0.1 mm outside the part. A blind hole stops exactly at
+    its declared floor. Every declared site must intersect the body.
+    """
     diameter: float
     depth: float
     at: Frame = Frame()
@@ -69,6 +82,17 @@ class Hole:
 
 @dataclass(frozen=True)
 class CounterboredHole(Hole):
+    """A Hole with a cylindrical recess measured from the entry face.
+
+    Args:
+        diameter: Finished through/pilot diameter in millimetres.
+        depth: Total hole depth in millimetres.
+        at: Entry frame, +Z into material.
+        pattern: Local hole sites or `None` for one site.
+        through: Extend the exit to clear a face at the declared depth.
+        recess: Counterbore specification. Its diameter must exceed the hole
+            diameter and its depth must leave a positive screw seat.
+    """
     recess: object = None
 
     def __post_init__(self):
@@ -93,6 +117,20 @@ class CounterboredHole(Hole):
 
 @dataclass(frozen=True)
 class CountersunkHole(Hole):
+    """A Hole with an explicit conical screw-head recess.
+
+    Args:
+        diameter: Finished throat diameter in millimetres.
+        depth: Total cutting depth in millimetres.
+        at: Entry frame, +Z into material.
+        pattern: Local hole sites or `None`.
+        through: Extend the exit to clear a face at the declared depth.
+        head_diameter: Recess mouth diameter, larger than `diameter`.
+        included_angle: Full cone angle in degrees, strictly between 0 and 180.
+
+    The derived recess depth must be less than the total hole depth. This
+    feature is supported independently of countersunk hardware rendering.
+    """
     head_diameter: float = 0
     included_angle: float = 90
 
@@ -127,6 +165,21 @@ class CountersunkHole(Hole):
 
 @dataclass(frozen=True)
 class TappedHole:
+    """A pilot hole plus a recorded thread-manufacturing operation.
+
+    Args:
+        thread: Thread designation such as `M3-0.5`.
+        pilot_diameter: Explicit drill/print pilot diameter in millimetres.
+        depth: Pilot depth in millimetres.
+        at: Entry frame, +Z into material.
+        pattern: Local sites or `None`.
+        method: `tap-after-printing`, `tap-after-machining`, or `self-tapping`.
+        thread_depth: Intended thread depth in millimetres; defaults to pilot depth.
+            It cannot exceed the pilot depth.
+
+    Geometry is the pilot hole. This class records thread intent; it does not
+    generate helical threads or choose the pilot diameter for a material.
+    """
     thread: str
     pilot_diameter: float
     depth: float
@@ -161,6 +214,21 @@ class TappedHole:
 
 @dataclass(frozen=True)
 class BearingSeat:
+    """A nominal cylindrical seat with an explicit diametral allowance.
+
+    Args:
+        nominal_diameter: Bearing's nominal mating diameter in millimetres.
+        allowance: Added to diameter, not radius, in millimetres.
+        depth: Cutting depth in millimetres.
+        at: Entry frame, +Z into material.
+        pattern: Local sites or `None`.
+        through: Extend the exit beyond the declared depth.
+        fit: `clearance` requires a nonnegative allowance; `press` requires a
+            nonpositive allowance; `transition` accepts either sign.
+
+    The fit label is declared intent. Process calibration and physical trials
+    remain necessary to establish the actual manufactured fit.
+    """
     nominal_diameter: float
     allowance: float
     depth: float
@@ -197,7 +265,16 @@ class BearingSeat:
 
 @dataclass(frozen=True)
 class Slot:
-    """Rounded through/blind slot; length includes the semicircular ends."""
+    """A rounded slot whose overall length includes both semicircular ends.
+
+    Args:
+        length: Overall local-X length in millimetres, at least `width`.
+        width: Slot width in millimetres.
+        depth: Cutting depth in millimetres.
+        at: Entry frame, +Z into material; X defines the slot's long direction.
+        pattern: Local site translations or `None`.
+        through: Extend the exit beyond the declared depth.
+    """
     length: float
     width: float
     depth: float
@@ -228,7 +305,18 @@ class Slot:
 
 @dataclass(frozen=True)
 class NutPocket:
-    """Explicit hexagonal trap, flat-to-flat dimension and installation step."""
+    """A hexagonal nut trap with a recorded installation operation.
+
+    Args:
+        across_flats: Finished pocket width across flats in millimetres.
+        depth: Pocket depth in millimetres.
+        at: Entry frame, +Z into material.
+        pattern: Local sites or `None`.
+        thread: Required nut thread designation such as `M3-0.5`.
+
+    Supply the measured or calibrated pocket dimensions explicitly; the thread
+    label does not select a catalogue nut or infer its external dimensions.
+    """
     across_flats: float
     depth: float
     at: Frame = Frame()
@@ -260,10 +348,18 @@ class NutPocket:
 
 @dataclass(frozen=True)
 class DBore(Hole):
-    """Shaft bore truncated at local X=flat; retains material on the +X side.
+    """A shaft bore truncated at local X=`flat`, retaining material on the +X side.
 
-    ``flat`` is the distance from shaft centre to its flat, not the removed
-    segment depth. Positive values leave more than half the circular bore.
+    Args:
+        diameter: Full circular bore diameter in millimetres.
+        depth: Cutting depth in millimetres.
+        at: Entry frame, +Z into material; +X points toward the retained flat.
+        pattern: Local sites or `None`.
+        through: Extend the exit beyond the declared depth.
+        flat: Signed centre-to-flat distance in millimetres, strictly inside
+            the bore radius. Positive values retain more than half the circular hole.
+
+    `flat` is a position, not the removed segment depth.
     """
     flat: float = 0
 
@@ -288,7 +384,16 @@ class DBore(Hole):
 
 @dataclass(frozen=True)
 class SealGroove:
-    """Circular toroidal groove, section radius explicit for fit inspection."""
+    """A toroidal groove with explicit nominal radii.
+
+    Args:
+        mean_radius: Radius from the datum axis to the section centre, in millimetres.
+        section_radius: Circular section radius in millimetres, smaller than the mean.
+        at: Torus centre frame; its axis is local Z.
+
+    The torus straddles the datum XY plane. Groove compression, squeeze, and
+    seal material selection are not inferred or validated.
+    """
     mean_radius: float
     section_radius: float
     at: Frame = Frame()
@@ -310,11 +415,18 @@ class SealGroove:
 
 @dataclass(frozen=True)
 class Boss:
-    """Cylindrical local reinforcement, optionally clipped to a native boundary.
+    """Add cylindrical local reinforcement, optionally clipped by a native boundary.
 
-    Features execute in declared order: a later boss can deliberately restore
-    material removed by an earlier operation before receiving its own hole.
-    ``limit`` is a native CadQuery shape or builder for a bespoke outer envelope.
+    Args:
+        diameter: Outer diameter in millimetres.
+        depth: Height along positive local Z in millimetres.
+        at: Base frame of the reinforcement.
+        pattern: Local XY sites or `None`.
+        limit: Optional native Shape or zero-argument native builder restricting
+            the reinforcement's outer envelope.
+
+    Added material must join the existing body and increase its volume. Features
+    run in declared order: a later boss can restore earlier removed material.
     """
     diameter: float
     depth: float

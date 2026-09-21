@@ -1,5 +1,5 @@
 site_name: CadKit
-site_description: Build, inspect and make real objects with Python and your agent.
+site_description: Learn CadKit with a box-and-lid tutorial, task guides, explanations and Python API reference.
 site_url: https://aurkakoak.github.io/cadkit/docs/
 repo_url: https://github.com/aurkakoak/cadkit
 repo_name: aurkakoak/cadkit
@@ -25,6 +25,8 @@ theme:
         icon: material/brightness-7
         name: Switch to light mode
   features:
+    - navigation.tabs
+    - navigation.indexes
     - navigation.sections
     - navigation.footer
     - navigation.top
@@ -33,6 +35,39 @@ theme:
     - content.code.copy
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            allow_inspection: false
+            docstring_style: google
+            members_order: source
+            filters: ['!^_']
+            inherited_members: false
+            merge_init_into_class: true
+            show_if_no_docstring: true
+            show_root_heading: false
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
+            show_source: false
+  - redirects:
+      redirect_maps:
+        install.md: how-to/install.md
+        interaction.md: how-to/connect-an-agent.md
+        agent-guide.md: tutorials/index.md
+        migration.md: how-to/adopt-cadquery.md
+        desktop.md: reference/desktop.md
+        workflows.md: how-to/export-and-check.md
+        mechanics.md: reference/mechanics.md
+        api.md: reference/index.md
+        contracts.md: reference/contracts.md
+        declarative.md: explanation/cadquery-and-cadkit.md
+        manufacturing-features.md: reference/design-features.md
+        declarative-assemblies.md: reference/design-assemblies.md
+        releases.md: contributing/releases.md
+        trials.md: contributing/trials.md
 markdown_extensions:
   - admonition
   - attr_list
@@ -41,31 +76,59 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.superfences
   - pymdownx.details
+  - pymdownx.snippets:
+      base_path: ['.']
+      check_paths: true
+      dedent_subsections: true
 extra_css:
   - assets/docs.css
 extra:
   homepage: https://aurkakoak.github.io/cadkit/
 nav:
-  - Start here: index.md
-  - Getting started:
-      - Installation: install.md
-      - Working with your agent: interaction.md
-      - Modelling loop: agent-guide.md
-      - Adopt an existing project: migration.md
-  - Guides:
-      - Desktop and MCP: desktop.md
-      - Export, render and slice: workflows.md
-      - Mechanical connections: mechanics.md
+  - Home: index.md
+  - Tutorial:
+      - tutorials/index.md
+      - 1. Make a box and lid: tutorials/01-box-and-lid.md
+      - 2. Create a project: tutorials/02-project.md
+      - 3. Inspect and export: tutorials/03-inspect-and-export.md
+      - 4. Fasten the lid: tutorials/04-fasten-the-lid.md
+      - 5. Check a change: tutorials/05-check-and-change.md
+      - 6. Work with an agent: tutorials/06-work-with-an-agent.md
+  - How-to guides:
+      - how-to/index.md
+      - Install and open a project: how-to/install.md
+      - Adopt existing CadQuery code: how-to/adopt-cadquery.md
+      - Export parts and run checks: how-to/export-and-check.md
+      - Choose fasteners and calibrate fits: how-to/fasteners-and-fit.md
+      - Inspect and measure: how-to/inspect-and-measure.md
+      - Connect an agent: how-to/connect-an-agent.md
+      - Slice parts: how-to/slice-parts.md
+      - Nest assemblies and add motion: how-to/nested-assemblies.md
+      - Render with Blender: how-to/render-with-blender.md
+  - Explanation:
+      - explanation/index.md
+      - CadQuery and CadKit: explanation/cadquery-and-cadkit.md
+      - Parts and placement: explanation/parts-and-placement.md
+      - Validation and evidence: explanation/validation-and-evidence.md
+      - Working with an agent: explanation/agent-workflow.md
   - Reference:
-      - Python API: api.md
-      - Files and contracts: contracts.md
-  - Declarative authoring:
-      - Overview: declarative.md
-      - Manufacturing features: manufacturing-features.md
-      - Assemblies: declarative-assemblies.md
+      - reference/index.md
+      - Project model: reference/project.md
+      - Declarative parts and frames: reference/design-parts.md
+      - Declarative assemblies and motion: reference/design-assemblies.md
+      - Manufacturing features: reference/design-features.md
+      - Mounts and attachments: reference/design-mounts.md
+      - Fasteners and hardware: reference/fasteners.md
+      - Mechanical contracts: reference/mechanics.md
+      - Geometry, fits and math: reference/geometry.md
+      - Export, preview and preflight: reference/export.md
+      - Command line: reference/cli.md
+      - Desktop and MCP: reference/desktop.md
+      - Files, schemas and units: reference/contracts.md
   - Contributing:
-      - Releases and publishing: releases.md
-      - Trial bundles: trials.md
+      - Writing documentation: contributing/documentation.md
+      - Releases and publishing: contributing/releases.md
+      - Trial bundles: contributing/trials.md
 validation:
   nav:
     not_found: warn

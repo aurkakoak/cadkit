@@ -19,6 +19,17 @@ def positive(value, label):
 
 @dataclass(frozen=True)
 class Frame:
+    """An orthonormal local datum in millimetres.
+
+    Args:
+        origin: XYZ position in millimetres.
+        z: Positive local Z direction; normalized on construction.
+        x: Positive local X direction; normalized and required perpendicular to Z.
+
+    Local Y follows the right-handed CadQuery plane convention. All coordinates
+    must be finite. Manufacturing features and mounts assign different meanings
+    to Z; consult the feature or mount reference before reusing a datum.
+    """
     origin: tuple = (0, 0, 0)
     z: tuple = (0, 0, 1)
     x: tuple = (1, 0, 0)
@@ -31,10 +42,19 @@ class Frame:
 
     @property
     def location(self):
+        """Return the equivalent native CadQuery Location."""
         return cq.Location(cq.Plane(self.origin, xDir=self.x, normal=self.z))
 
     @classmethod
     def from_location(cls, location):
+        """Convert a native CadQuery Location into an explicit Frame.
+
+        Args:
+            location (cq.Location): Rigid translation and rotation.
+
+        Returns:
+            (Frame): Origin and orthonormal axes of the location.
+        """
         plane = location.plane
         return cls(plane.origin.toTuple(), plane.zDir.toTuple(), plane.xDir.toTuple())
 
@@ -44,6 +64,13 @@ class Frame:
 
 @dataclass(frozen=True)
 class PolarPattern:
+    """Distinct sites on a circle in a feature's local XY plane.
+
+    Args:
+        radius: Positive pattern radius in millimetres.
+        angles: Nonempty tuple of finite angles in degrees, measured from +X
+            toward +Y. Angles equivalent modulo 360 are rejected as duplicates.
+    """
     radius: float
     angles: tuple[float, ...]
 
@@ -58,6 +85,7 @@ class PolarPattern:
 
     @property
     def points(self):
+        """Return local `(x, y)` sites in millimetres in the supplied angle order."""
         return tuple((self.radius*math.cos(math.radians(a)), self.radius*math.sin(math.radians(a)))
                      for a in self.angles)
 
@@ -67,7 +95,12 @@ class PolarPattern:
 
 @dataclass(frozen=True)
 class PointPattern:
-    """Explicit sites in a feature's local XY plane, in millimetres."""
+    """Explicit sites in a feature's local XY plane.
+
+    Args:
+        points: Nonempty, distinct `(x, y)` pairs in millimetres. The default
+            is one site at the datum origin.
+    """
     points: tuple[tuple[float, float], ...] = ((0, 0),)
 
     def __post_init__(self):

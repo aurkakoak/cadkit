@@ -9,6 +9,23 @@ from .parts import native
 
 @dataclass(frozen=True)
 class Purchased:
+    """A supplied component with local geometry and attachment datums.
+
+    Args:
+        name: Stable definition name.
+        body: Zero-argument builder returning a valid native CadQuery solid.
+        ports: Named local Frames.
+        features: Explicit feature operations. Use `supplied=True` mount roles
+            for already present supplier geometry; other features modify the body.
+        description: Human-readable component description.
+        supplier: Supplier name for the purchased BOM.
+        sku: Supplier identifier for the purchased BOM.
+        representation: `envelope` for approximate geometry or `detailed`.
+        quantity: Positive supplier quantity represented by each assembly instance.
+
+    Purchased objects are not exported as manufactured Parts by `as_project()`.
+    An envelope does not establish exact supplier fit.
+    """
     name: str
     body: Callable
     ports: Mapping[str, Frame] = field(default_factory=dict)
@@ -34,6 +51,7 @@ class Purchased:
             raise ValueError("Purchased ports must be local Frames")
 
     def build(self):
+        """Build and copy the native body, then apply any explicit owned feature operations."""
         body = native(self.body()).copy()
         # Supplied features describe a vendor component. Geometry-changing
         # features are explicit if a purchased blank is subsequently machined.

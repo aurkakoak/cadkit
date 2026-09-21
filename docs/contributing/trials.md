@@ -1,7 +1,7 @@
 # Local adoption trials
 
 Build a release from the current CadKit files with a unique local version. The
-builder needs Python with pip and network/cache access to setuptools build
+builder needs uv and network/cache access to setuptools build
 requirements. It excludes consumer geometry, node_modules, generated desktop
 bundles, caches and prior trial reports.
 
@@ -11,9 +11,10 @@ python3 releases/cadkit-trial.1/install.py verify
 ```
 
 `skill/` is the maintained skill entrypoint and UI metadata. The builder packages
-it under `skills/cadkit` and copies the canonical consumer docs plus desktop
-reference into `references/`. Install from the assembled release, so copied
-skills never depend on documentation outside their folder. Edit canonical docs
+it under `skills/cadkit`; `scripts/sync_skill.py` assembles `agent-reference/`
+and the desktop reference into `references/`. Run that sync before building.
+Install from the assembled release, so copied
+skills never depend on documentation outside their folder. Edit the agent sources
 and rebuild under a new label; do not hand-edit generated skill references.
 
 Before handing a release to a consumer agent:

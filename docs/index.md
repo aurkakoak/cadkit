@@ -1,45 +1,26 @@
-# Build real objects with code
+# CadKit documentation
 
-CadKit brings your Python geometry, desktop view and AI agent into the same
-modelling loop. Write ordinary CadQuery builders, inspect assemblies and fits,
-and export parts for fabrication.
+CadKit gives a CadQuery model named parts, assemblies, manufacturing information
+and checks. You keep writing Python geometry and use CadKit to inspect it,
+export it and work on it with an agent.
 
-## Get the desktop app
+**Start with [Make a box and lid](tutorials/index.md).** The tutorial begins with
+two ordinary CadQuery shapes. You will turn them into a project, inspect and
+export the parts, fasten the lid, test a design change and give an agent a small
+modelling task. Each section has a runnable example.
 
-Install the latest macOS or Linux release from your terminal:
-
-```sh
-curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | sh
-```
-
-You can also download an installer from [GitHub Releases](https://github.com/aurkakoak/cadkit/releases).
-The packaged desktop includes Python and CadKit and opens a writable example
-on first launch. See the [desktop guide](../desktop/README.md) to open your own
-project and connect your agent. Projects with extra Python dependencies can
-use their own environment; see [installation](install.md).
-
-## Give your agent the skill
-
-From your project directory:
-
-```sh
-npx skills add aurkakoak/cadkit --skill cadkit
-```
-
-The skill teaches your agent the CadKit modelling workflow. For live selection,
-measurements and camera control, open the app and connect the MCP server using
-the configuration behind its plug icon. See [working with your agent](interaction.md).
-
-## Find your next step
-
-| You want to… | Start here |
+| What you need | Where to go |
 | --- | --- |
-| Create or change a part | [Modelling loop](agent-guide.md) and [Python API](api.md) |
-| Bring an existing CadQuery project | [Migration guide](migration.md) |
-| Inspect geometry with an agent | [Desktop and MCP](../desktop/README.md) |
-| Declare joints, hardware and fits | [Mechanical connections](mechanics.md) |
-| Export, render or slice parts | [Workflow commands](workflows.md) |
-| Try the declarative Python API | [Declarative authoring](declarative.md) |
+| Learn by building something | [Box-and-lid tutorial](tutorials/index.md) |
+| Complete a particular task | [How-to guides](how-to/index.md) |
+| Understand the model and its limits | [Explanation](explanation/index.md) |
+| Look up a constructor, method, command or file format | [Reference](reference/index.md) |
 
-Geometry stays in your project. CadKit connects named parts, parameters,
-assemblies, checks and manufacturing outputs without replacing CadQuery.
+If you already have a project, go directly to [installation](how-to/install.md),
+[adopting CadQuery code](how-to/adopt-cadquery.md) or
+[connecting an agent](how-to/connect-an-agent.md).
+
+The Python reference describes the implemented API. `cadkit` contains the
+established project model; `cadkit.design` is the experimental declarative
+authoring layer used in the tutorial. Both produce projects that the desktop
+app and CLI can open. See [how they fit together](explanation/cadquery-and-cadkit.md).

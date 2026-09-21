@@ -66,7 +66,8 @@ npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
 
 1. Update Python and desktop versions together; update `desktop/package-lock.json`
    and `uv.lock` with the package managers. Refresh any version-pinned examples.
-2. Run `uv run python scripts/sync_skill.py` after changing documentation.
+2. Run `uv run python scripts/sync_skill.py` after changing `agent-reference/`
+   or the desktop README. Build the human docs separately with `scripts/build_site.py`.
 3. Merge the tested release changes into `main`.
 4. Push a tag matching the version:
 

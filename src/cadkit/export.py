@@ -11,6 +11,16 @@ from .geometry import Mesh, shape, mesh, TOLERANCE
 
 
 def inspect_model(model):
+    """Measure geometry without applying print orientation.
+
+    Args:
+        model (object): Native Shape, Workplane, or Mesh.
+
+    Returns:
+        (dict): Representation, validity, solid count, volume in mm³, and min/max/
+            size bounds in mm. Mesh validity requires positive watertight geometry
+            with consistent winding.
+    """
     model = shape(model)
     if isinstance(model, Mesh):
         tm = model.triangles()
@@ -40,6 +50,19 @@ def inspect_model(model):
 
 
 def validate_part(part, model):
+    """Validate built fabrication geometry against its Part definition.
+
+    Args:
+        part (cadkit.project.Part): Manufacturing definition.
+        model (object): Geometry already in print orientation.
+
+    Returns:
+        (dict): Measurement information from `inspect_model`.
+
+    Raises:
+        ValueError: Geometry is invalid, solid count differs from `expected_solids`,
+            or its lowest Z is more than 0.001 mm from the bed.
+    """
     info = inspect_model(model)
     if not info["valid"]:
         raise ValueError(f'{part.name}: invalid {info["geometry"]} geometry')
@@ -61,6 +84,7 @@ def write_json(path, data):
 
 
 def export_stl(model, path):
+    """Write a native Shape or explicit Mesh to STL, creating parent directories. Native tessellation uses 0.025 mm linear and 0.08 rad angular tolerance."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(model, Mesh):
@@ -72,6 +96,19 @@ def export_stl(model, path):
 
 
 def export_part(part, directory):
+    """Build and validate a Part, then write print-oriented STL and native STEP.
+
+    Args:
+        part (cadkit.project.Part): Manufacturing definition to build.
+        directory (str | Path): Destination directory, created if needed.
+
+    Returns:
+        (dict): Part metadata, measured geometry, relative filenames, and SHA-256
+            hashes. Mesh parts have STL only; a stale same-name STEP is removed.
+
+    This primitive does not review assembly mechanics. Use `build` for a
+    project-aware export with the mechanical preflight gate and manifests.
+    """
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     model = part.build()
@@ -97,6 +134,25 @@ def export_part(part, directory):
 
 
 def build(project, parts, directory, *, mechanical_report=None, validation_override=None):
+    """Export a selected manufacturing set with validation and manifests.
+
+    Args:
+        project (cadkit.project.Project): Source project and mechanical declarations.
+        parts (list): Selected stable Parts, normally from `project.select()`.
+        directory (str | Path): Destination directory.
+        mechanical_report (dict | None): Optional precomputed scoped report.
+            Otherwise, projects declaring mechanics are checked automatically.
+        validation_override (str | None): Explicit review reason of 3–1000
+            characters for exporting despite confirmed assembly failures.
+
+    Returns:
+        (dict): Build manifest also written to `manifest.json`, alongside
+            `quantities.json` and `subassemblies.json`.
+
+    Confirmed mechanical failures block export unless deliberately overridden.
+    An incomplete review remains visible and does not prove full assembly fit.
+    A partial build's manifest contains exactly the selected set.
+    """
     from .preflight import scoped_report, reviewed_report
     directory = Path(directory)
     parts = list(parts)
@@ -143,6 +199,17 @@ def build(project, parts, directory, *, mechanical_report=None, validation_overr
 
 
 def export_assembly(components, output, *, exploded=False):
+    """Write a named, colored installed STEP assembly and omission metadata.
+
+    Args:
+        components (list): Installed Components.
+        output (str | Path): Destination STEP path.
+        exploded (bool): Apply each Component's full explosion translation once.
+
+    Returns:
+        (cq.Assembly): Exported native hierarchy. Mesh components are omitted
+            and listed in the companion same-stem JSON file.
+    """
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     assembly = cq.Assembly(name=output.stem)
@@ -171,6 +238,19 @@ def export_assembly(components, output, *, exploded=False):
 
 
 def export_render_assets(components, directory, *, exploded=False):
+    """Write component STLs and a scene manifest for Blender presentation.
+
+    Args:
+        components (list): Installed Components, including explicit meshes.
+        directory (str | Path): Destination directory.
+        exploded (bool): Set the presentation flag in the scene manifest.
+
+    Returns:
+        (dict): Manifest also written as `scene.json`.
+
+    STL coordinates stay installed. Explosion offsets are separate metadata
+    applied by the renderer, avoiding a duplicated transform.
+    """
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     items = []
@@ -201,6 +281,19 @@ def export_render_assets(components, directory, *, exploded=False):
 
 
 def run_checks(checks, directory):
+    """Evaluate named intersection/contact checks and write results.
+
+    Args:
+        checks (tuple): Explicit Check definitions.
+        directory (str | Path): Directory for `report.json` and failing witness STLs.
+
+    Returns:
+        (list[dict]): Individual outcomes, including intersection volume, optional
+            native gap, and errors. Exceptions are failed checks.
+
+    Empty input yields an empty report with a passing aggregate. This means
+    no checks ran, not that assembly collisions were ruled out.
+    """
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     results = []
