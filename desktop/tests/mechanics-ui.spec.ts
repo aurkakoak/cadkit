@@ -35,8 +35,7 @@ test("connections, selective hardware presentation and pre-print review stay dis
       "--project",
       "project:PROJECT",
       "--python",
-      process.env.CADKIT_TEST_PYTHON ??
-        path.resolve("../../grinder/.venv/bin/python"),
+      process.env.CADKIT_TEST_PYTHON ?? path.resolve("../.venv/bin/python"),
     ],
     env: { ...process.env, CADKIT_USER_DATA: path.join(directory, "profile") },
   });

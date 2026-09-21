@@ -6,16 +6,10 @@ and export parts for fabrication.
 
 ## Get the desktop app
 
-Install the latest macOS release from your terminal:
+Install the latest macOS or Linux release from your terminal:
 
 ```sh
 curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | sh
-```
-
-On Windows, run this in PowerShell:
-
-```powershell
-irm https://aurkakoak.github.io/cadkit/install.ps1 | iex
 ```
 
 You can also download an installer from [GitHub Releases](https://github.com/aurkakoak/cadkit/releases).

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
 
 import pytest
 
@@ -17,7 +19,7 @@ SPEC.loader.exec_module(release)
 
 
 def test_incomplete_release_is_never_checksummed(tmp_path):
-    (tmp_path / "CadKit-0.2.0-windows-x64.exe").write_bytes(b"installer")
+    (tmp_path / "CadKit-0.2.0-macos-arm64.zip").write_bytes(b"installer")
     with pytest.raises(ValueError, match="Release incomplete"):
         release.prepare_assets(tmp_path, "0.2.0")
     assert not (tmp_path / "SHA256SUMS").exists()
@@ -26,7 +28,8 @@ def test_incomplete_release_is_never_checksummed(tmp_path):
 def test_all_installer_checksums_cover_actual_content(tmp_path):
     names = [f"CadKit-0.2.0-macos-{arch}.{extension}"
              for arch in ("arm64", "x64") for extension in ("dmg", "zip")]
-    names += ["CadKit-0.2.0-windows-x64.exe", "cadkit-0.2.0-py3-none-any.whl",
+    names += [f"CadKit-0.2.0-linux-{arch}.tar.gz" for arch in ("arm64", "x64")]
+    names += ["cadkit-0.2.0-py3-none-any.whl",
               "cadkit-0.2.0.tar.gz", "cadkit-skill-0.2.0.zip"]
     for name in names:
         (tmp_path / name).write_bytes(name.encode())
@@ -48,7 +51,7 @@ def test_release_tag_must_match_packages():
 @pytest.fixture
 def mac_installer(tmp_path):
     if os.name == "nt":
-        pytest.skip("POSIX installer; Windows uses install.ps1")
+        pytest.skip("The macOS installer requires POSIX tools")
     tools = tmp_path / "bin"
     tools.mkdir()
     archive = tmp_path / "archive"
@@ -72,7 +75,7 @@ done
 case "$url" in
   */releases/latest) printf '{\\n  "tag_name": "v0.2.0"\\n}\\n' ;;
   */SHA256SUMS) cp "$TEST_CHECKSUMS" "$output" ;;
-  *.zip) cp "$TEST_ARCHIVE" "$output" ;;
+  *.zip|*.tar.gz) cp "$TEST_ARCHIVE" "$output" ;;
   *) exit 22 ;;
 esac
 ''',
@@ -92,6 +95,8 @@ fi
         target.chmod(0o755)
     env = {**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"],
            "CADKIT_INSTALL_DIR": str(tmp_path / "Applications with spaces"),
+           "HOME": str(tmp_path / "home"), "XDG_DATA_HOME": str(tmp_path / "data"),
+           "CADKIT_BIN_DIR": str(tmp_path / "launchers"),
            "TEST_ARCHIVE": str(archive), "TEST_CHECKSUMS": str(checksums)}
     env.pop("CADKIT_VERSION", None)
     env.pop("CADKIT_REPOSITORY", None)
@@ -131,9 +136,9 @@ def test_bad_checksum_preserves_existing_app(mac_installer):
 
 def test_unsupported_os_is_explicit(mac_installer):
     env, _ = mac_installer
-    result = run_installer({**env, "TEST_OS": "Linux"})
+    result = run_installer({**env, "TEST_OS": "FreeBSD"})
     assert result.returncode != 0
-    assert "Linux binaries are not yet available" in result.stderr
+    assert "This installer supports macOS and Linux" in result.stderr
     assert not Path(env["CADKIT_INSTALL_DIR"]).exists()
 
 
@@ -142,3 +147,36 @@ def test_untrusted_version_is_rejected(mac_installer):
     result = run_installer({**env, "CADKIT_VERSION": "../../invalid"})
     assert result.returncode != 0
     assert "Invalid release version" in result.stderr
+
+
+def test_linux_archive_install_and_launcher(mac_installer, tmp_path):
+    env, checksums = mac_installer
+    archive_path = Path(env["TEST_ARCHIVE"])
+    with tarfile.open(archive_path, "w:gz") as archive:
+        content = b"#!/bin/sh\nexit 0\n"
+        executable = tarfile.TarInfo("CadKit-0.2.0-linux-arm64/cadkit-desktop")
+        executable.mode, executable.size = 0o755, len(content)
+        archive.addfile(executable, io.BytesIO(content))
+    digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    checksums.write_text(f"{digest}  CadKit-0.2.0-linux-arm64.tar.gz\n")
+    result = run_installer({**env, "TEST_OS": "Linux"})
+    assert result.returncode == 0, result.stderr
+    binary = Path(env["CADKIT_INSTALL_DIR"]) / "cadkit-desktop"
+    launcher = Path(env["CADKIT_BIN_DIR"]) / "cadkit-desktop"
+    assert binary.is_file() and os.access(binary, os.X_OK)
+    assert launcher.is_symlink() and launcher.resolve() == binary.resolve()
+    desktop = Path(env["XDG_DATA_HOME"]) / "applications/cadkit.desktop"
+    assert f'Exec="{binary}"' in desktop.read_text()
+    assert not list(binary.parent.parent.glob(".cadkit-install.*"))
+
+
+def test_linux_refuses_unrelated_directory(mac_installer):
+    env, _ = mac_installer
+    destination = Path(env["CADKIT_INSTALL_DIR"])
+    destination.mkdir()
+    marker = destination / "user-document"
+    marker.write_text("keep")
+    result = run_installer({**env, "TEST_OS": "Linux"})
+    assert result.returncode != 0
+    assert "not a CadKit installation" in result.stderr
+    assert marker.read_text() == "keep"

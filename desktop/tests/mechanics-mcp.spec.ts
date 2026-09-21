@@ -21,8 +21,7 @@ test("mechanical contracts share live state, hardware presentation and revision-
       "--project",
       "project:PROJECT",
       "--python",
-      process.env.CADKIT_TEST_PYTHON ??
-        path.resolve("../../grinder/.venv/bin/python"),
+      process.env.CADKIT_TEST_PYTHON ?? path.resolve("../.venv/bin/python"),
     ],
     env: { ...process.env, CADKIT_USER_DATA: path.join(dir, "profile") },
   });

@@ -388,7 +388,7 @@ def projection(values, cut=False):
     return union([polygon(contour) for contour in contours])
 
 
-# Higher-level primitives shared with Brewer; these accept ordinary CadQuery.
+# Higher-level primitives that accept ordinary CadQuery objects.
 def annulus(outer_diameter, inner_diameter, height):
     return (
         cq.Workplane("XY")

@@ -17,6 +17,8 @@ extraResources:
     to: examples
     filter:
       - "*.py"
+  - from: ../site/assets/mark.svg
+    to: cadkit.svg
 asar: true
 npmRebuild: false
 beforePack: scripts/check-bundle.cjs
@@ -28,13 +30,9 @@ mac:
     - zip
   artifactName: CadKit-${version}-macos-${arch}.${ext}
   hardenedRuntime: true
-win:
+linux:
+  executableName: cadkit-desktop
+  category: Graphics
   target:
-    - nsis
-  artifactName: CadKit-${version}-windows-${arch}.${ext}
-nsis:
-  oneClick: false
-  perMachine: false
-  allowToChangeInstallationDirectory: true
-  createDesktopShortcut: true
-  createStartMenuShortcut: true
+    - tar.gz
+  artifactName: CadKit-${version}-linux-${arch}.${ext}

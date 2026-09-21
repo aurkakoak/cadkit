@@ -1,27 +1,5 @@
 "use strict";
 
-const installers = {
-  mac: {
-    command: "curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | sh",
-    note: "Run in Terminal.",
-  },
-  windows: {
-    command: "irm https://aurkakoak.github.io/cadkit/install.ps1 | iex",
-    note: "Run in PowerShell.",
-  },
-};
-
-for (const button of document.querySelectorAll("[data-platform]")) {
-  button.addEventListener("click", () => {
-    const selected = installers[button.dataset.platform];
-    document.getElementById("install-command").textContent = selected.command;
-    document.getElementById("platform-note").textContent = selected.note;
-    for (const platform of document.querySelectorAll("[data-platform]")) {
-      platform.setAttribute("aria-pressed", String(platform === button));
-    }
-  });
-}
-
 for (const button of document.querySelectorAll("[data-copy]")) {
   button.addEventListener("click", async () => {
     const code = document.getElementById(button.dataset.copy);

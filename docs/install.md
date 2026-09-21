@@ -15,37 +15,39 @@ Open `~/Applications/CadKit.app`. The installer selects your architecture,
 checks the release checksum, and replaces an existing installation. You can
 also download the matching `.dmg` from [GitHub Releases](https://github.com/aurkakoak/cadkit/releases/latest).
 
-## Windows
+## Linux
 
-Download and run the `.exe` from [GitHub Releases](https://github.com/aurkakoak/cadkit/releases/latest),
-or run this in PowerShell to open the installer:
+On x64 or arm64 Linux:
 
-```powershell
-irm https://aurkakoak.github.io/cadkit/install.ps1 | iex
+```sh
+curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | sh
 ```
 
-Open CadKit from the Start menu. Windows x64 is supported.
+The installer selects the matching native `.tar.gz` release and verifies its
+checksum. It installs the app in `~/.local/share/cadkit`, adds the
+`~/.local/bin/cadkit-desktop` command and creates the app-menu entry
+`~/.local/share/applications/cadkit.desktop`. Open CadKit from your app menu or
+run `~/.local/bin/cadkit-desktop`.
 
 ## Open your own project
 
 Save an importable CadKit project as `project.py` with a `PROJECT` attribute.
-From that project's directory, launch the installed app:
+From that project's directory, launch the installed app on macOS:
 
 ```sh
-# macOS
 "$HOME/Applications/CadKit.app/Contents/MacOS/CadKit" \
   --project-dir "$PWD" --project project:PROJECT
 ```
 
-```powershell
-# Windows; adjust the executable path if you chose another installation folder.
-& "$env:LOCALAPPDATA\Programs\CadKit\CadKit.exe" `
+On Linux:
+
+```sh
+"$HOME/.local/bin/cadkit-desktop" \
   --project-dir "$PWD" --project project:PROJECT
 ```
 
 The app uses its bundled Python by default. For projects with additional
-Python dependencies, append `--python /absolute/path/to/.venv/bin/python`
-on macOS or `--python C:\path\to\.venv\Scripts\python.exe` on Windows.
+Python dependencies, append `--python /absolute/path/to/.venv/bin/python`.
 That environment must have CadKit and its `desktop` extra installed.
 
 ## Python CLI and agent skill
@@ -230,4 +232,3 @@ uv run --locked python scripts/build_trial.py --label trial.1 --output /tmp/cadk
 Consumer environments remain independent. If a consumer intentionally uses
 this source checkout, install it into that consumer's selected interpreter with
 `uv pip install --python /path/to/consumer/.venv/bin/python -e '/path/to/cadkit[desktop]'`.
-On Windows, the interpreter is normally `.venv\Scripts\python.exe`.

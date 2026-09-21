@@ -21,9 +21,6 @@ h1 span { color: #779080; }
 .intro { color: var(--muted); font-size: 16px; line-height: 1.65; margin: 0 0 34px; max-width: 490px; }
 .install-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 11px; gap: 12px; }
 .install-label { font-size: 9px; letter-spacing: 1.25px; font-weight: 600; color: #718073; }
-.platforms { display: flex; align-items: center; gap: 5px; }
-.platforms button { border: 0; background: none; color: #68786b; font-size: 11px; padding: 5px 8px; border-radius: 4px; }
-.platforms button[aria-pressed="true"] { background: #e3e8dc; color: #244732; }
 .command { background: #e9ecdf; border: 1px solid #dce1d1; border-radius: 5px; min-height: 55px; display: flex; gap: 10px; align-items: center; padding: 10px 10px 10px 15px; color: #304d37; }
 .command code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; min-width: 0; }
 .prompt { color: #8b9f88; font-size: 13px; flex-shrink: 0; }

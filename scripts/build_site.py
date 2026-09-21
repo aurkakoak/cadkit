@@ -61,8 +61,7 @@ def main() -> None:
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
     shutil.copytree(ROOT / "site", OUTPUT)
-    for name in ("install.sh", "install.ps1"):
-        shutil.copy2(ROOT / "scripts" / name, OUTPUT / name)
+    shutil.copy2(ROOT / "scripts" / "install.sh", OUTPUT / "install.sh")
     (OUTPUT / ".nojekyll").touch()
     from mkdocs.commands.build import build
     from mkdocs.config import load_config

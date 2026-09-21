@@ -16,7 +16,7 @@ along positive Z. Positions are degrees and millimetres respectively.
 ```python
 from cadkit import design as d
 
-head = d.Assembly("brew-head")
+head = d.Assembly("tool-head")
 housing = head.add("housing", housing_definition)
 rotor = head.add("rotor", rotor_definition)
 head.fix(housing)

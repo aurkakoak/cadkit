@@ -2,7 +2,7 @@
 
 CadKit uses one version in `pyproject.toml` and `desktop/package.json`. The
 release workflow checks both against a `vMAJOR.MINOR.PATCH` tag. The current
-release targets are macOS Apple Silicon, macOS Intel and Windows x64.
+release targets are macOS Apple Silicon and Intel, plus Linux x64 and arm64.
 
 ## Development
 
@@ -27,7 +27,7 @@ release tool, not a requirement imposed on callers of the Python package.
 
 CI runs Python tests, desktop/MCP integration tests, runtime-selection tests,
 skill validation and a strict documentation build. Package builds run the
-Python tests again on each native operating system.
+Python tests again on each native operating system and architecture.
 
 ## Build installers
 
@@ -39,7 +39,7 @@ npm ci
 npm run bundle:python
 npm run package -- --mac --arm64 --publish never
 # Intel Mac: --mac --x64
-# Windows:   --win --x64
+# Linux: --linux --x64 or --linux --arm64
 ```
 
 The bundle script copies a complete uv-managed Python distribution, installs
@@ -58,7 +58,8 @@ Run the packaged smoke check before distributing:
 ```sh
 npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
 # Intel Mac: release/mac/CadKit.app/Contents/MacOS/CadKit
-# Windows: release/win-unpacked/CadKit.exe
+# Linux x64: release/linux-unpacked/cadkit-desktop
+# Linux arm64: release/linux-arm64-unpacked/cadkit-desktop
 ```
 
 ## Publish a version
@@ -74,7 +75,7 @@ npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
    git push origin main v0.2.0
    ```
 
-The Release workflow tests the code, builds all three native targets, launches
+The Release workflow tests the code, builds all four native targets, launches
 each packaged app, builds the wheel/sdist and skill archive, and validates the
 complete asset set. Only then does it create a draft release, upload all assets
 and SHA-256 checksums, and publish it. If an upload fails, the draft remains
@@ -92,34 +93,36 @@ Expected assets:
 
 - `CadKit-VERSION-macos-arm64.dmg` and `.zip`
 - `CadKit-VERSION-macos-x64.dmg` and `.zip`
-- `CadKit-VERSION-windows-x64.exe`
+- `CadKit-VERSION-linux-x64.tar.gz` and `CadKit-VERSION-linux-arm64.tar.gz`
 - `cadkit-VERSION-py3-none-any.whl` and `cadkit-VERSION.tar.gz`
 - `cadkit-skill-VERSION.zip` and `SHA256SUMS`
 
 ## Code signing
 
-Without credentials, builds are unsigned or ad-hoc signed. macOS Gatekeeper
-and Windows SmartScreen can warn or block launch. The installers do not disable
-either protection. For public distribution without those warnings, configure
+Without credentials, macOS builds are unsigned or ad-hoc signed. Gatekeeper
+can warn or block launch. The installer preserves this protection.
+For public distribution without those warnings, configure
 the repository's Actions secrets before building the release:
 
-- macOS: `CSC_LINK`, `CSC_KEY_PASSWORD` (Developer ID certificate), `APPLE_ID`,
-  `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (notarization).
-- Windows: `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` for the signing certificate.
+- `CSC_LINK`, `CSC_KEY_PASSWORD` (Developer ID certificate).
+- `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (notarization).
 
 See [electron-builder code signing](https://www.electron.build/code-signing.html)
 for certificate formats and alternative signing services. Certificate passwords
 belong in Actions secrets, never in this repository. A signed build should be
-downloaded and opened on a separate Mac/Windows machine before announcing it.
+downloaded and opened on a separate Mac before announcing it.
 
-## Install scripts
+## Install script
 
-GitHub Pages serves `install.sh` and `install.ps1` from the source scripts.
-Both resolve a published GitHub Release, select the matching asset and verify
-its checksum before installing. macOS installs to `~/Applications` without
-sudo and preserves the previous app if replacement fails. Windows launches
-the NSIS installation wizard. Neither script downloads a Python environment
-on the user's machine.
+GitHub Pages serves `install.sh` from the source script. It resolves a published
+GitHub Release, selects the matching operating system and architecture, and
+verifies the asset's checksum before installing without sudo. The app includes
+its Python environment.
+
+On macOS, it installs to `~/Applications` and preserves the previous app if
+replacement fails. On Linux, it installs the native `.tar.gz` bundle to
+`~/.local/share/cadkit`, creates the `~/.local/bin/cadkit-desktop` launcher and
+adds `~/.local/share/applications/cadkit.desktop` to the app menu.
 
 To select a specific macOS version or location:
 
@@ -128,15 +131,13 @@ curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | \
   CADKIT_VERSION=0.2.0 CADKIT_INSTALL_DIR="$HOME/Applications" sh
 ```
 
-On Windows, set `$env:CADKIT_VERSION = '0.2.0'` before running the script.
-The scripts require a published release; a draft or Actions artifact is not
-available through the latest-release URL. Linux users can run from source;
-Linux binary packages are not part of this initial release pipeline.
+The script requires a published release; a draft or Actions artifact is not
+available through the latest-release URL.
 
 ## Documentation and skill
 
 The site consists of `site/` for the small static landing page, Material for
-MkDocs at `/docs/`, and the two installer scripts. Build it with:
+MkDocs at `/docs/`, and the macOS/Linux installer script. Build it with:
 
 ```sh
 uv run --locked --only-group docs python scripts/build_site.py

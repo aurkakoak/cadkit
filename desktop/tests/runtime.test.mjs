@@ -24,14 +24,12 @@ function fixture(t) {
     path.join(resourcesPath, "examples", "bracket.py"),
     "# original example\n",
   );
-  for (const platform of ["win32", "darwin"]) {
-    const executable = pythonExecutable(
-      path.join(resourcesPath, "python"),
-      platform,
-    );
-    mkdirSync(path.dirname(executable), { recursive: true });
-    writeFileSync(executable, "");
-  }
+  const executable = pythonExecutable(
+    path.join(resourcesPath, "python"),
+    "darwin",
+  );
+  mkdirSync(path.dirname(executable), { recursive: true });
+  writeFileSync(executable, "");
   return {
     argv: [],
     cwd: root,
@@ -39,6 +37,7 @@ function fixture(t) {
     resourcesPath,
     userData: path.join(root, "profile"),
     isPackaged: true,
+    platform: "darwin",
     env: {
       PYTHONHOME: "/wrong-python",
       PYTHONPATH: "/wrong-packages",
@@ -64,28 +63,35 @@ test("packaged first launch creates editable example and preserves subsequent ed
   assert.equal(first.workerEnv.PATH, "/usr/bin");
 });
 
-test("macOS and Windows bundled runtime wins over a project venv", (t) => {
+test("macOS bundled runtime wins over a project venv", (t) => {
   const options = fixture(t);
-  for (const platform of ["darwin", "win32"]) {
-    const venv = path.join(
-      options.cwd,
-      ".venv",
-      ...(platform === "win32" ? ["Scripts", "python.exe"] : ["bin", "python"]),
-    );
-    mkdirSync(path.dirname(venv), { recursive: true });
-    writeFileSync(venv, "");
-    const runtime = resolveRuntime({
-      ...options,
-      platform,
-      argv: ["--project-dir", options.cwd, "--project", "bracket:PROJECT"],
-    });
-    assert.equal(runtime.projectDir, options.cwd);
-    assert.equal(runtime.reference, "bracket:PROJECT");
-    assert.equal(
-      runtime.python,
-      pythonExecutable(path.join(options.resourcesPath, "python"), platform),
-    );
-  }
+  const venv = path.join(options.cwd, ".venv", "bin", "python");
+  mkdirSync(path.dirname(venv), { recursive: true });
+  writeFileSync(venv, "");
+  const runtime = resolveRuntime({
+    ...options,
+    argv: ["--project-dir", options.cwd, "--project", "bracket:PROJECT"],
+  });
+  assert.equal(runtime.projectDir, options.cwd);
+  assert.equal(runtime.reference, "bracket:PROJECT");
+  assert.equal(
+    runtime.python,
+    pythonExecutable(path.join(options.resourcesPath, "python"), "darwin"),
+  );
+});
+
+test("Linux development uses the selected project's virtual environment", (t) => {
+  const options = fixture(t);
+  const python = path.join(options.cwd, ".venv", "bin", "python");
+  mkdirSync(path.dirname(python), { recursive: true });
+  writeFileSync(python, "");
+  const runtime = resolveRuntime({
+    ...options,
+    platform: "linux",
+    isPackaged: false,
+  });
+  assert.equal(runtime.python, python);
+  assert.equal(runtime.projectDir, options.cwd);
 });
 
 test("explicit Python override and development imports remain available", (t) => {

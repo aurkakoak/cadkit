@@ -27,8 +27,7 @@ test("desktop visibility, Parts, measurements, theme persistence and rebuild rec
     "--project",
     "project:PROJECT",
     "--python",
-    process.env.CADKIT_TEST_PYTHON ??
-      path.resolve("../../grinder/.venv/bin/python"),
+    process.env.CADKIT_TEST_PYTHON ?? path.resolve("../.venv/bin/python"),
   ];
   const launch = () =>
     launchElectron({

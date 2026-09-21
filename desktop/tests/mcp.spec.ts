@@ -59,8 +59,7 @@ output.write_text('; filament used [g] = 12.5\\n; estimated printing time (norma
       "--project",
       "project:PROJECT",
       "--python",
-      process.env.CADKIT_TEST_PYTHON ??
-        path.resolve("../../grinder/.venv/bin/python"),
+      process.env.CADKIT_TEST_PYTHON ?? path.resolve("../.venv/bin/python"),
     ],
     env: { ...process.env, CADKIT_USER_DATA: profile },
   });

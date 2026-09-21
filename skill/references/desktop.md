@@ -7,8 +7,8 @@ switch updates the viewport too and remembers the choice.
 
 ## Install the app
 
-The release pipeline builds macOS Apple Silicon and Intel DMG/ZIP downloads,
-and a Windows x64 installer, with Python and CAD dependencies included.
+The release pipeline builds macOS Apple Silicon and Intel DMG/ZIP downloads
+and Linux x64/ARM64 tarballs, with Python and CAD dependencies included.
 See [installation](install.md) and [release builds](releases.md).
 Opening the installed app creates an editable bracket project in the app's
 user-data directory. Existing edits survive later launches and upgrades.
@@ -20,8 +20,13 @@ Open your own project from the command line, for example on macOS:
   --project-dir /path/to/project --project project:PROJECT
 ```
 
-Use the installed `CadKit.exe` with the same arguments on Windows. Installed
-apps use their bundled Python by default. `--python /path/to/python` selects
+On Linux, the installer adds `cadkit-desktop` to `~/.local/bin`:
+
+```sh
+cadkit-desktop --project-dir /path/to/project --project project:PROJECT
+```
+
+Installed apps use their bundled Python by default. `--python /path/to/python` selects
 a custom environment if your project requires additional packages; install
 `cadkit[desktop]` and those packages there first. A consumer with a `src/`
 package layout must be installed in that custom environment or supplied
@@ -30,13 +35,18 @@ through `PYTHONPATH` with the `--python` override.
 For a supplied trial source bundle, follow its `docs/install.md` to install
 the Python wheel and copy a writable desktop runtime.
 
-## Run Grinder
+## Run from source
 
-From the sibling Grinder checkout, after its usual `make setup`:
+From this repository, prepare Python and launch the included example:
 
 ```sh
-make desktop-setup  # once: Python extra, npm packages, Electron runtime
-make desktop
+cd /path/to/cadkit
+uv sync --locked --extra desktop
+cd desktop
+npm ci
+npm run setup
+npm start -- --project-dir ../examples --project bracket:PROJECT \
+  --python /path/to/cadkit/.venv/bin/python
 ```
 
 Source checkouts require Node 22.12+ and the project's Python environment.
@@ -56,8 +66,7 @@ npm start -- --project-dir /path/to/project \
 
 `--project` is an importable `cadkit.Project` reference. The default is
 `project:PROJECT`. In source checkouts, the default Python is `.venv/bin/python`
-in the project folder (`.venv/Scripts/python.exe` on Windows), falling back to
-`python3` on Unix or `python` on Windows.
+in the project folder, falling back to `python3`.
 Opening a project executes its Python builders, just like the CadKit CLI.
 
 ## Inspect
@@ -196,7 +205,7 @@ extra highlights clear after a successful rebuild. Notes are session-only;
 they do not modify Python Part definitions or survive closing the app.
 Selection, visibility and camera remain stable.
 
-The app bridge uses a private local socket (a named pipe on Windows) with a
+The app bridge uses a private local socket with a
 random authentication token. Discovery is scoped to the current user and
 project; on Unix its directory is 0700 and discovery/socket files are 0600.
 No HTTP listener is opened. MCP exposes validated operations, not arbitrary
@@ -274,7 +283,8 @@ PYTHONPATH=../src /path/to/project/.venv/bin/python -m pytest ../tests -q
 ```
 
 Build on the target OS and architecture with `npm run bundle:python`, then
-`npm run package -- --mac --arm64`, `--mac --x64`, or `--win --x64`.
+`npm run package -- --mac --arm64`, `npm run package -- --mac --x64`,
+`npm run package -- --linux --arm64`, or `npm run package -- --linux --x64`.
 Run `npm run smoke:package -- /path/to/packaged/executable` to verify the actual
 app archive, default project, bundled CAD worker, renderer and MCP startup.
 The Python bundle is a complete standalone installation; the build moves it

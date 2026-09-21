@@ -43,7 +43,7 @@ Builders return one valid CadQuery shape or an explicit compound. Feature
 application verifies that every hole site intersects the body. A blind pocket's
 overshoot extends through its open end only; its nominal bottom stays fixed.
 Optional `Part.finalize` applies a final native geometry operation, such as
-Brewer's existing outer-face partition for reliable STEP export. It does not alter
+an outer-face partition for reliable STEP export. It does not alter
 the authored feature metadata; final geometry still needs the project's checks.
 
 The resulting legacy Part's `describe()` includes a `design` object containing

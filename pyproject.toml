@@ -42,5 +42,6 @@ no-build-package = ["numba", "llvmlite"]
 required-environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64' and python_version == '3.12'",
     "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
-    "sys_platform == 'win32' and platform_machine == 'AMD64' and python_version == '3.12'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64' and python_version == '3.12'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.12'",
 ]

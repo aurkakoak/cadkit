@@ -26,22 +26,18 @@ PROJECT = assembly.as_project()
 
 ## Install
 
-**macOS** — Apple Silicon and Intel:
+**macOS and Linux** — arm64 and x86_64:
 
 ```sh
 curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | sh
 ```
 
-Open `~/Applications/CadKit.app`. Python and the CAD libraries are included.
+On macOS, open `~/Applications/CadKit.app`. On Linux, launch CadKit from the
+application menu or run `~/.local/bin/cadkit-desktop`. Python and the CAD libraries
+are included.
 
-**Windows** — download and run the `.exe` from
-[Releases](https://github.com/aurkakoak/cadkit/releases/latest), or run in PowerShell:
-
-```powershell
-irm https://aurkakoak.github.io/cadkit/install.ps1 | iex
-```
-
-Builds without signing certificates may show an operating-system security warning.
+You can also download a DMG or Linux archive from [Releases](https://github.com/aurkakoak/cadkit/releases/latest).
+Unsigned builds may show a macOS security warning.
 
 **Python** — to run the example or use the CLI, install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
 
