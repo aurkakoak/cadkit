@@ -81,7 +81,15 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run package -- --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+        run: |
+          # Missing GitHub secrets expand to empty strings. electron-builder
+          # interprets an empty CSC_LINK as a certificate path at the cwd.
+          for signing_variable in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!signing_variable:-}" ]]; then
+              unset "$signing_variable"
+            fi
+          done
+          npm run package -- --${{ matrix.platform }} --${{ matrix.arch }} --publish never
       - name: Launch the packaged app with its bundled worker
         if: runner.os == 'macOS'
         working-directory: desktop
