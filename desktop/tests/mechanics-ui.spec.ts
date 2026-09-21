@@ -6,14 +6,16 @@ import os from "node:os";
 
 const fixture = `
 import cadquery as cq
-from cadkit import Project, Part, Component, Joint, Interface, Fastening, FastenerSpec, FastenerSite, HardwareItem
+import cadkit as ck
+from cadkit import Joint, Interface, Fastening, FastenerSpec, FastenerSite, HardwareItem
 
 def plate(z):
     return cq.Solid.makeBox(24,16,2).translate((-12,-8,z))
-def components(**options):
-    return [Component('top',plate(0),'plates',part='top'),Component('base',plate(2),'plates',part='base')]
+assembly = ck.Assembly('fixture')
+assembly.fix(assembly.add('top',ck.Part('top',lambda:plate(0),ck.FDM('PETG'),group='plates')))
+assembly.fix(assembly.add('base',ck.Part('base',lambda:plate(2),ck.FDM('PETG'),group='plates')))
 bolt = FastenerSpec('socket_head_cap_screw','M3-0.5',length_mm=8)
-PROJECT = Project('fixture',(Part('top',lambda:plate(0),'plates'),Part('base',lambda:plate(2),'plates')),components,
+PROJECT = assembly.as_project(
     joints=(Joint('plate-joint',('top','base'),interfaces=('plate-contact',),fastenings=('left-bolt','right-bolt')),),
     interfaces=(Interface('plate-contact',('top','base'),'contact'),),
     fastenings=tuple(Fastening(name,('top','base'),sites=(FastenerSite('site',(x,0,0)),),

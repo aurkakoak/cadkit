@@ -1,10 +1,11 @@
-"""Geometry and consumer-adapter checks for the experimental authoring layer."""
+"""Geometry and consumer-adapter checks for the authoring model."""
 from dataclasses import replace
 import json
 import math
 import cadquery as cq
 import pytest
-from cadkit import Part as LegacyPart, FastenerSpec
+from cadkit._project import Part as FabricationPart
+from cadkit import FastenerSpec
 from cadkit import design as d
 from cadkit.export import build
 from cadkit.mechanics import hardware_bom
@@ -116,13 +117,13 @@ def test_recess_change_recomputes_stack_and_existing_engagement_validation():
     assert any(f["code"] == "engagement" and f["status"] == "fail" for f in report["findings"])
 
 
-def test_legacy_adapter_exports_native_geometry_and_keeps_print_pose_separate(tmp_path):
+def test_project_exports_native_geometry_and_keeps_print_pose_separate(tmp_path):
     spec, plate, base = definitions()
     plate = replace(plate, manufacture=d.FDM("PETG", (180, 0, 0)))
     fixture = assembly(spec, plate, base, d.Frame((0, 0, 40)))
     project = fixture.as_project()
     part = next(p for p in project.parts if p.name == "plate")
-    assert isinstance(part, LegacyPart)
+    assert isinstance(part, FabricationPart)
     assert part.build().BoundingBox().zmin == pytest.approx(0)
     assert next(c for c in project.components() if c.name == "plate").model.BoundingBox().zmin == pytest.approx(40)
     json.dumps(project.describe())

@@ -58,7 +58,7 @@ and create a project environment:
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.2.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.3.0"
 # Add your project.py, then:
 uv run cadkit --project project:PROJECT build all
 ```
@@ -178,13 +178,13 @@ installation boundary.
 | MCP says app is not running | Open the app with the same real project directory and project reference |
 | Slicer cannot load profiles | Supply actual exported profiles and preserve inheritance/include files |
 
-See [migration](migration.md), [API](api.md), [workflows](workflows.md), and the
+See [CadQuery adoption](migration.md), [API](api.md), [workflows](workflows.md), and the
 desktop reference supplied with the release for the next steps.
 
 ## Development source selected by a consumer
 
 Follow the consumer setup when it explicitly selects a CadKit source checkout
-(e.g. `CADKIT_SOURCE`). For 0.2, install that checkout with its pinned
+(e.g. `CADKIT_SOURCE`). Install that checkout with its pinned
 cq_warehouse dependency and use its matching desktop source. A receipt for an
 older trial is historical provenance, not a command to downgrade the active
 source integration. Keep frozen trial bundles unchanged.

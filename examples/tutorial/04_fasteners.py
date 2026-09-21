@@ -32,7 +32,7 @@ def lid_body():
 
 # --8<-- [start:insert]
 from cadkit import FastenerSpec
-from cadkit import design as d
+import cadkit as ck
 
 
 def insert_envelope(spec):
@@ -46,8 +46,8 @@ def insert_envelope(spec):
 
 
 # --8<-- [start:mount]
-MOUNT = d.InsertMount(
-    pattern=d.PointPattern(MOUNT_POINTS),
+MOUNT = ck.InsertMount(
+    pattern=ck.PointPattern(MOUNT_POINTS),
     screw=FastenerSpec("socket_head_cap_screw", "M3-0.5", length_mm=SCREW_LENGTH),
     insert=FastenerSpec(
         "heat_set_insert", "M3-0.5", length_mm=5.7, standard="tutorial-envelope",
@@ -55,24 +55,24 @@ MOUNT = d.InsertMount(
         description="Tutorial insert envelope; select and calibrate a real insert before printing.",
     ),
     clearance_diameter=3.4,
-    pocket=d.InsertPocket(diameter=4, depth=6.7, insert_outer_diameter=4.7),
+    pocket=ck.InsertPocket(diameter=4, depth=6.7, insert_outer_diameter=4.7),
     minimum_engagement=3,
 )
 # --8<-- [end:mount]
 
 # --8<-- [start:roles]
-BOX = d.Part(
-    "box", box_body, manufacture=d.FDM("PETG"),
+BOX = ck.Part(
+    "box", box_body, manufacture=ck.FDM("PETG"),
     features={"lid-mount": MOUNT.insert_side()},
 )
-LID = d.Part(
-    "lid", lid_body, manufacture=d.FDM("PETG"),
+LID = ck.Part(
+    "lid", lid_body, manufacture=ck.FDM("PETG"),
     features={"lid-mount": MOUNT.clearance_side(thickness=LID_THICKNESS)},
 )
 # --8<-- [end:roles]
 
 # --8<-- [start:connection]
-DESIGN = d.Assembly("enclosure")
+DESIGN = ck.Assembly("enclosure")
 box = DESIGN.add("box", BOX, color=(0.32, 0.58, 0.72))
 lid = DESIGN.add("lid", LID, color=(0.86, 0.70, 0.40), explode=(0, 0, 20))
 DESIGN.fix(box)

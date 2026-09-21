@@ -28,8 +28,7 @@ Project; geometry is built only where the command needs it.
 | `mechanics` | None | Resolve installed relationships and hardware BOM as JSON |
 | `bom` | None | Resolved hardware BOM as JSON |
 
-`bom` currently reports fastening hardware. Declarative purchased-component
-quantities are separately available through `assembly.purchased_bom()` and
+`bom` currently reports fastening hardware. Purchased-component quantities are separately available through `assembly.purchased_bom()` and
 project design metadata.
 
 ## Fabrication and validation
@@ -41,8 +40,8 @@ project design metadata.
 | `validate-assembly` | `--parts PART ...`; `--no-collision-scan`; `--output build/assembly-validation.json` | Installed mechanics report, optionally scoped to a print set |
 
 `all` selects production Parts. An optional Part can be built by its explicit
-name. Print orientation is applied once: X/Y/Z rotations, then a Z translation
-to the bed. Exporting a subset replaces the manifest with exactly that subset.
+name. Fabrication placement is applied once: the declared X/Y/Z rotations or
+explicit print frame, then a Z translation to the bed. Exporting a subset replaces the manifest with exactly that subset.
 
 A confirmed mechanical failure blocks `build`. An explicit override reason
 of 3–1000 characters is retained with the artifacts. An `incomplete` report
@@ -53,9 +52,9 @@ no collision coverage. See [mechanical validation](mechanics.md).
 ## Assembly and presentation
 
 These commands accept `--view NAME`, `--exploded`, and `--printed-only`.
-Named views come from the Project. `--printed-only` passes
-`include_hardware=False` to the component builder and suppresses generated
-fastening hardware; custom builders control what else they include.
+Named views come from the Project. `--printed-only` selects installed instances
+of manufactured Parts and excludes Purchased definitions and generated fastening
+hardware. It does not add uninstalled coupons or change manufacturing quantities.
 
 | Command | Additional options and defaults | Result |
 | --- | --- | --- |

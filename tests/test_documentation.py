@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import re
 import sys
 from urllib.parse import unquote, urlsplit
 
@@ -10,6 +11,79 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def run_documented_project(page, marker):
+    """Execute the complete Python block readers copy from a how-to guide."""
+    source = ROOT / "docs" / "how-to" / page
+    blocks = re.findall(r"```python\n(.*?)\n```", source.read_text(), re.DOTALL)
+    matching = [block for block in blocks if marker in block]
+    assert len(matching) == 1, f"Expected one complete {marker} example in {source}"
+    namespace = {"__name__": "documentation_example", "__file__": str(source)}
+    exec(compile(matching[0], str(source), "exec"), namespace)
+    return namespace
+
+
+def test_cadquery_adoption_guide_separates_local_installed_and_print_coordinates():
+    data = run_documented_project("adopt-cadquery.md", "PLATE =")
+    definition = data["PLATE"]
+    project = data["PROJECT"]
+    assert [(part.name, part.quantity, part.group) for part in project.parts] == [
+        ("plate", 1, "structure"),
+    ]
+    local = definition.build()
+    installed = project.get_components(include_hardware=False)[0].model
+    fabricated = definition.build_for_print()
+    assert local.BoundingBox().zmin == pytest.approx(-2)
+    assert installed.Center().z == pytest.approx(20)
+    assert fabricated.BoundingBox().zmin == pytest.approx(0)
+    # Placement changes do not change the manufactured shape.
+    assert installed.Volume() == pytest.approx(local.Volume())
+    assert fabricated.Volume() == pytest.approx(local.Volume())
+
+
+def test_coupon_guide_exports_an_uninstalled_optional_definition(tmp_path):
+    import cadquery as cq
+    from cadkit.export import build
+
+    data = run_documented_project("fasteners-and-fit.md", "COUPON =")
+    project = data["PROJECT"]
+    assert project.get_components(include_hardware=False) == []
+    assert project.select() == []
+    selected = project.select(("bore-coupon",))
+    assert len(selected) == 1
+    coupon = selected[0]
+    assert coupon.quantity == 1 and coupon.group == "calibration"
+    assert coupon.production is False
+    assert "diametral allowance" in coupon.notes
+    manifest = build(project, selected, tmp_path)
+    assert [part["name"] for part in manifest["parts"]] == ["bore-coupon"]
+    assert (tmp_path / "bore-coupon.stl").stat().st_size > 0
+    exported = cq.importers.importStep(str(tmp_path / "bore-coupon.step")).val()
+    assert exported.isValid() and len(exported.Solids()) == 1
+    assert exported.BoundingBox().zmin == pytest.approx(0)
+    assert exported.Volume() == pytest.approx(data["COUPON"].build().Volume())
+
+
+def test_nested_assembly_guide_keeps_quantities_and_shapes_across_named_poses():
+    data = run_documented_project("nested-assemblies.md", "machine =")
+    project = data["PROJECT"]
+    assert {part.name: part.quantity for part in project.parts} == {"base": 2, "arm": 2}
+    home = {item.name: item.model for item in project.get_components(include_hardware=False)}
+    opened = {item.name: item.model for item in project.get_components(view="open", include_hardware=False)}
+    assert home.keys() == opened.keys() == {"left/base", "left/arm", "right/base", "right/arm"}
+    for name in ("left/arm", "right/arm"):
+        assert home[name].BoundingBox().zmin == pytest.approx(4)
+        assert opened[name].BoundingBox().zmin == pytest.approx(4)
+        assert opened[name].Volume() == pytest.approx(home[name].Volume())
+    # Each reused unit resolves its own scoped motion coordinate in world space.
+    for name, offset, angle in (("left/arm", -40, 60), ("right/arm", 40, -60)):
+        expected = (data["ARM"].build()
+                    .rotate((0, 0, 0), (0, 0, 1), angle)
+                    .translate((offset, 0, 4)))
+        difference = opened[name].cut(expected).Volume() + expected.cut(opened[name]).Volume()
+        assert difference == pytest.approx(0, abs=1e-6)
+    assert {part.name: part.quantity for part in project.parts} == {"base": 2, "arm": 2}
 
 
 def test_trial_tutorial_includes_expand_sections_and_collapsible_complete_files(tmp_path):

@@ -23,7 +23,7 @@ from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from .cli import load_project
 from .export import build
 from .geometry import Mesh, mesh, shape
-from .project import Assembly
+from ._project import Assembly
 from .preflight import scoped_report
 
 

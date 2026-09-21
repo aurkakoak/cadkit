@@ -220,7 +220,7 @@ def _nonnegative(value, name):
 
 def component_index(assembly):
     """Same URL-encoded IDs as the desktop tree; no dependence on viewport state."""
-    from .project import Assembly
+    from ._project import Assembly
     result = {}
     def visit(node, parent=""):
         path = parent + "/" + quote(node.name, safe="")
@@ -246,7 +246,7 @@ def resolve_components(refs, index):
 
 
 def hardware_assembly(fastenings):
-    from .project import Assembly, Component
+    from ._project import Assembly, Component
     groups = []
     built = {}
     for fastening in fastenings:
@@ -346,8 +346,8 @@ def validate_mechanics(project, assembly=None, *, scan_collisions=True, toleranc
     """Validate installed collisions and the project's declared mechanical contracts.
 
     Args:
-        project (cadkit.project.Project): Project containing declarations.
-        assembly (cadkit.project.Assembly | None): Reuse installed geometry, or
+        project (cadkit._project.Project): Project containing declarations.
+        assembly (cadkit._project.Assembly | None): Reuse installed geometry, or
             build the project's default assembly.
         scan_collisions (bool): Scan undeclared native component intersections.
             Disabling this leaves collision coverage unverified.

@@ -44,7 +44,7 @@ faces. A `FastenerSite` points along the screw's insertion direction. It places
 the cutter or hardware; declaring it alone does not cut the plate.
 
 For two parts that share a mounting pattern, use a shared `InsertMount` or
-`ThreadedMount` in `cadkit.design` instead of duplicating hole locations. The
+`ThreadedMount` instead of duplicating hole locations. The
 [tutorial](../tutorials/index.md) introduces that workflow; the
 [feature reference](../reference/design-features.md) describes its dimensions.
 
@@ -53,7 +53,7 @@ For two parts that share a mounting pattern, use a shared `InsertMount` or
 Save this complete project as `calibration.py`:
 
 ```python
-from cadkit import Part, Project
+import cadkit as ck
 from cadkit.fits import fit_coupon
 
 ALLOWANCES = (-0.1, 0.0, 0.1, 0.2, 0.3)
@@ -63,15 +63,12 @@ def coupon():
     return fit_coupon(4.0, ALLOWANCES, height=6, wall=3)
 
 
-PROJECT = Project(
-    "bore-calibration",
-    parts=(Part(
-        "bore-coupon", coupon, group="calibration", material="PETG",
-        production=False,
-        notes="Increasing X: -0.1, 0.0, +0.1, +0.2, +0.3 mm diametral allowance.",
-    ),),
-    components=lambda **options: [],
+COUPON = ck.Part(
+    "bore-coupon", body=coupon, manufacture=ck.FDM("PETG"),
+    group="calibration", production=False,
+    notes="Increasing X: -0.1, 0.0, +0.1, +0.2, +0.3 mm diametral allowance.",
 )
+PROJECT = ck.Assembly("bore-calibration").as_project(extra_parts=(COUPON,))
 ```
 
 Export the optional part by name:

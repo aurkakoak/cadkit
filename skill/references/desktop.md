@@ -244,27 +244,31 @@ session; files remain after exit. Jobs from an earlier build are labelled.
 
 ## Model contract
 
-`Part` describes a manufacturing definition. `Component` is an installed
-instance with an optional `part` reference. `Assembly` contains components and
-other assemblies:
+`Part` describes a local manufacturing definition. `Assembly.add()` creates an
+instance of a Part, Purchased component or nested Assembly. Fix roots at Frames
+and connect the remaining instances, then compile the graph for the app:
 
 ```python
-from cadkit import Assembly
+import cadkit as ck
 
-def assembly_tree(**options):
-    return Assembly("machine", (
-        Assembly("drive", (motor_component, carrier_component)),
-        Assembly("frame", (left_tube, right_tube)),
-    ))
-
-# Supply assembly=assembly_tree alongside the existing components builder.
+machine = ck.Assembly("machine")
+left = machine.add("left", bracket_definition)
+right = machine.add("right", bracket_definition)
+machine.fix(left, at=ck.Frame((-40, 0, 0)))
+machine.fix(right, at=ck.Frame((40, 0, 0)))
+PROJECT = machine.as_project()
 ```
 
-All current component geometry already uses world coordinates. Assembly nodes
-organize that geometry; they do not apply a second placement transform. Sibling
-names must be unique. Paths are escaped names scoped by parent assembly; rename
-or reparent an object and it receives a new identity. Projects without an
-assembly builder get a tree from their existing component groups.
+The graph resolves each instance into world coordinates for inspection. Nested
+assemblies compose local frames and retain their hierarchy. Manufacturing
+quantities default to instance counts; `extra_parts` and `quantities` provide
+uninstalled definitions and explicit totals. Print orientation is independent
+of installed placement.
+
+Sibling names must be unique. Paths are escaped names scoped by parent assembly;
+rename or reparent an object and it receives a new identity. The desktop's
+component IDs identify these resolved installed objects; Part names identify
+manufacturing definitions.
 
 The React interface is independent of Python model classes. `cadkit.desktop`
 exposes JSON-line requests: `scene`, `measure`, `export_part`, and `export_parts`.

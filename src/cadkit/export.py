@@ -53,7 +53,7 @@ def validate_part(part, model):
     """Validate built fabrication geometry against its Part definition.
 
     Args:
-        part (cadkit.project.Part): Manufacturing definition.
+        part (cadkit._project.Part): Manufacturing definition.
         model (object): Geometry already in print orientation.
 
     Returns:
@@ -99,7 +99,7 @@ def export_part(part, directory):
     """Build and validate a Part, then write print-oriented STL and native STEP.
 
     Args:
-        part (cadkit.project.Part): Manufacturing definition to build.
+        part (cadkit.Part | object): Part definition or selected project fabrication record.
         directory (str | Path): Destination directory, created if needed.
 
     Returns:
@@ -109,6 +109,9 @@ def export_part(part, directory):
     This primitive does not review assembly mechanics. Use `build` for a
     project-aware export with the mechanical preflight gate and manifests.
     """
+    from .design.parts import Part
+    if isinstance(part, Part):
+        part = part.as_part()
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     model = part.build()
@@ -137,8 +140,8 @@ def build(project, parts, directory, *, mechanical_report=None, validation_overr
     """Export a selected manufacturing set with validation and manifests.
 
     Args:
-        project (cadkit.project.Project): Source project and mechanical declarations.
-        parts (list): Selected stable Parts, normally from `project.select()`.
+        project (cadkit.Project): Source project and mechanical declarations.
+        parts (list): Selected fabrication records from `project.select()`.
         directory (str | Path): Destination directory.
         mechanical_report (dict | None): Optional precomputed scoped report.
             Otherwise, projects declaring mechanics are checked automatically.

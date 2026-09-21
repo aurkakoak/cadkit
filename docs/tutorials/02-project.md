@@ -14,8 +14,8 @@ add these part definitions:
 --8<-- "examples/tutorial/02_project.py:parts"
 ```
 
-A `d.Part` is a definition: a name, a builder and manufacturing information.
-`d.FDM("PETG")` records the intended process and material. It does not change
+A `ck.Part` is a definition: a name, a builder and manufacturing information.
+`ck.FDM("PETG")` records the intended process and material. It does not change
 the shape or supply printer settings.
 
 ## Arrange the parts
@@ -26,7 +26,7 @@ After the two definitions, add the assembly:
 --8<-- "examples/tutorial/02_project.py:assembly"
 ```
 
-A `d.Assembly` contains instances of those definitions. Here it has one `box`
+A `ck.Assembly` contains instances of those definitions. Here it has one `box`
 and one `lid`. `fix` places each instance at the default frame, so the coordinates
 you wrote in chapter 1 are also their installed coordinates. This is enough for
 two loose parts. In chapter 4, a fastening connection will place the lid instead.
@@ -34,8 +34,8 @@ two loose parts. In chapter 4, a fastening connection will place the lid instead
 The `explode` vector is a presentation offset for exploded views. It does not
 move the installed lid or change exported manufacturing geometry.
 
-Finally, `as_project()` adapts the design into a `cadkit.Project`. Assigning it
-to `PROJECT` makes the file importable by the existing tools. It captures the
+Finally, `as_project()` compiles the assembly into a `cadkit.Project`. Assigning it
+to `PROJECT` makes the file importable by the CLI and desktop. It captures the
 design at that point, so keep that line after your assembly declarations.
 
 Your file is now ready to run. To check your edits or start at this chapter,

@@ -6,14 +6,18 @@ import os from "node:os";
 
 const fixture = `
 import cadquery as cq
-from cadkit import Assembly, Component, Part, Project
+import cadkit as ck
 a = cq.Workplane('XY').box(10, 10, 10).val()
-b = a.translate((15, 0, 0))
-left = Component('left-block', a, 'blocks', color=(0.4,0.75,0.6), part='block')
-right = Component('right-block', b, 'blocks', color=(0.6,0.65,0.7))
-PROJECT = Project('fixture', (Part('block', lambda: a, 'blocks', material='PETG'),),
-    lambda: [left, right], assembly=lambda: Assembly('fixture', (
-        Assembly('left-assembly', (left,)), Assembly('right-assembly', (right,)))))
+part = ck.Part('block', lambda: a, ck.FDM('PETG'), group='blocks')
+reference = ck.Purchased('reference', lambda: a)
+left = ck.Assembly('left-assembly')
+left.fix(left.add('left-block', part, group='blocks', color=(0.4,0.75,0.6)))
+right = ck.Assembly('right-assembly')
+right.fix(right.add('right-block', reference, group='blocks', color=(0.6,0.65,0.7)), at=ck.Frame((15, 0, 0)))
+assembly = ck.Assembly('fixture')
+assembly.fix(assembly.add('left-assembly', left))
+assembly.fix(assembly.add('right-assembly', right))
+PROJECT = assembly.as_project()
 `;
 
 test("desktop visibility, Parts, measurements, theme persistence and rebuild recovery", async () => {

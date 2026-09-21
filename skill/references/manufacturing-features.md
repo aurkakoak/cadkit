@@ -1,25 +1,25 @@
 # Declarative manufacturing features
 
-`cadkit.design.Part` owns a native CadQuery body, named manufacturing features,
+A `cadkit.Part` with native CadQuery geometry owns named manufacturing features,
 and a manufacturing process. CadQuery constructs the bespoke structural form;
 Cadkit features describe the physical function, apply its geometry, and report
 subsequent operations such as tapping and installing inserts. The same part
 builds identically regardless of assembly placement or print orientation.
 
 ```python
-from cadkit import design as d
+import cadkit as ck
 
-block = d.Part(
-    "motor-block", body=block_blank, manufacture=d.FDM("PETG"),
+block = ck.Part(
+    "motor-block", body=block_blank, manufacture=ck.FDM("PETG"),
     features={
-        "bearing": d.BearingSeat(
+        "bearing": ck.BearingSeat(
             nominal_diameter=22, allowance=0.15, depth=7,
-            at=d.Frame((0, 0, 20), z=(0, 0, -1)),
+            at=ck.Frame((0, 0, 20), z=(0, 0, -1)),
         ),
-        "motor-threads": d.TappedHole(
+        "motor-threads": ck.TappedHole(
             "M3-0.5", pilot_diameter=2.5, depth=8, thread_depth=6,
-            pattern=d.PointPattern(((-10, 0), (10, 0))),
-            at=d.Frame((0, 0, 20), z=(0, 0, -1)),
+            pattern=ck.PointPattern(((-10, 0), (10, 0))),
+            at=ck.Frame((0, 0, 20), z=(0, 0, -1)),
         ),
     },
 )
@@ -40,7 +40,7 @@ All dimensions are millimetres. `Hole`, `CounterboredHole`, `CountersunkHole`,
 A hole with `through=True` also extends 0.1 mm beyond the declared exit face;
 its depth remains an authored dimension, never an inferred bounding box.
 
-`CounterboredHole(..., recess=d.Counterbore(diameter, depth))` and
+`CounterboredHole(..., recess=ck.Counterbore(diameter, depth))` and
 `CountersunkHole(..., head_diameter=..., included_angle=90)` put the head seat
 at the entry. `Slot(length, width, depth)` includes the semicircular ends in
 its overall length and aligns along local X. `DBore(..., flat=...)` truncates
@@ -67,14 +67,14 @@ clearance holes cut positive local Z. This convention keeps both sides and
 hardware in one coordinate system.
 
 ```python
-mount = d.ThreadedMount(
-    pattern=d.PointPattern(((-10, 0), (10, 0))),
+mount = ck.ThreadedMount(
+    pattern=ck.PointPattern(((-10, 0), (10, 0))),
     screw=screw_spec,
     clearance_diameter=3.4,
     pilot_diameter=2.5, thread_depth=6, hole_depth=8,
     minimum_engagement=3,
 )
-cover_role = mount.clearance_side(thickness=4, head_recess=d.Counterbore(6, 2))
+cover_role = mount.clearance_side(thickness=4, head_recess=ck.Counterbore(6, 2))
 base_role = mount.threaded_side()
 ```
 
@@ -95,10 +95,10 @@ its nominal fastening axis remains at the pattern site.
 Intermediate roles contribute physical layer lengths and matched geometry:
 
 ```python
-gear_role = mount.middle_side(thickness=6, head_recess=d.Counterbore(6, 1.7))
+gear_role = mount.middle_side(thickness=6, head_recess=ck.Counterbore(6, 1.7))
 spacer_role = mount.middle_side(offset=4.3, thickness=41.7, supplied=True)
 cover_role = mount.clearance_side(
-    offset=46, thickness=3, head_recess=d.Counterbore(6, 1),
+    offset=46, thickness=3, head_recess=ck.Counterbore(6, 1),
 )
 assembly.connect(
     "cover-stack", mount,
@@ -143,7 +143,7 @@ For a purchased insert, declare the documented outside dimension separately
 from the receiving pilot:
 
 ```python
-pocket = d.InsertPocket(
+pocket = ck.InsertPocket(
     diameter=4.0, depth=6.7,
     insert_outer_diameter=4.6,
 )
@@ -176,12 +176,12 @@ inventing a second part or a placement joint:
 ```python
 assembly.attach(
     "clamp-closure",
-    d.CaptiveNutFastening(screw_spec, nut_spec, nut_thickness=1.6),
+    ck.CaptiveNutFastening(screw_spec, nut_spec, nut_thickness=1.6),
     through=clamp.feature("closing-hole"), nut=clamp.feature("captive-nut"),
 )
 assembly.attach(
     "shaft-retention",
-    d.SetScrew(set_screw_spec),
+    ck.SetScrew(set_screw_spec),
     thread=pinion.feature("radial-thread"), stop=pinion.feature("shaft-d-bore"),
 )
 ```

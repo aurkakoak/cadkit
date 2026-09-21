@@ -6,8 +6,14 @@ tolerance is in radians. Blender is the only boundary that scales to metres.
 
 `Project.describe()` returns schema version 1, the project name, description,
 units, part metadata, discoverable parameters and named checks. Part names must
-be safe filename stems. Quantities are positive integers in a Part; slicer
-quantity overrides also accept zero for unselected alternatives.
+be safe filename stems. Manufacturing quantities are positive integers in the
+compiled inventory; slicer overrides also accept zero for unselected alternatives.
+
+Manufacturing metadata includes X/Y/Z `print_rotation` angles in degrees. A
+supplied fabrication frame also appears as `print_frame` (`origin`, `x`, `z`);
+the angles describe that frame's orientation. Apply the frame or the rotations,
+then Z bed normalization, once. Exported part files already include that
+fabrication placement. Installed assembly frames are independent.
 
 A build manifest has schema version 1, project name, CadQuery version,
 tessellation settings and a `parts` array. Each entry has the Part metadata,

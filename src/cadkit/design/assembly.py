@@ -12,7 +12,8 @@ from types import MappingProxyType, SimpleNamespace
 from urllib.parse import quote
 import cadquery as cq
 
-from ..project import Assembly as LegacyAssembly, Component, Project
+from .._project import Assembly as PlacedAssembly, Component, Project as ProjectRecord
+from ..geometry import Mesh
 from ..mechanics import Joint, Interface, AccessEnvelope, hardware_assembly
 from .frames import Frame, name as valid_name
 from .parts import Part, native
@@ -161,8 +162,8 @@ class Assembly:
     Each instance has one placement parent. Multiple fixed roots are allowed;
     cycles, ungrounded instances, and conflicting placements are errors.
 
-    Geometry is built lazily by output methods. This experimental class differs
-    from `cadkit.project.Assembly`, which only groups already placed geometry.
+    Geometry is built lazily by output methods. Manufacturing definitions remain
+    local and reusable across every instance and pose.
     """
     def __init__(self, name):
         self.name = valid_name(name)
@@ -208,7 +209,7 @@ class Assembly:
         """
         valid_name(name)
         if not isinstance(part, (Part, Purchased, Assembly)):
-            raise TypeError("Assembly instances need a design.Part, Purchased or Assembly definition")
+            raise TypeError("Assembly instances need a Part, Purchased or Assembly definition")
         if part is self:
             raise ValueError("An assembly cannot contain itself")
         if name in self._instances:
@@ -391,7 +392,7 @@ class Assembly:
             description (str): Physical intent of the interface.
 
         Returns:
-            (Contact): Local declaration resolved into a stable Interface for validation.
+            (Contact): Local declaration resolved into an Interface for validation.
 
         Nested assembly handles are not leaf contact participants. Declare the
         contact in the assembly owning the relevant leaves.
@@ -722,12 +723,12 @@ class Assembly:
             kind (str | None): Restrict leaves to `manufactured` or `purchased`.
 
         Returns:
-            (list[cadkit.project.Component]): Located Components in world millimetres.
+            (list[cadkit._project.Component]): Located Components in world millimetres.
         """
         return self._resolve(at=at, pose=pose).components(include_hardware=include_hardware, kind=kind)
 
     def models(self, *, kind=None, names="leaf", at=Frame(), pose=None):
-        """Build native Workplanes keyed by instance names or relative paths.
+        """Build models keyed by instance names or relative paths.
 
         Args:
             kind (str | None): `manufactured`, `purchased`, or all definitions.
@@ -736,7 +737,8 @@ class Assembly:
             pose (dict | str | None): Joint positions or named pose.
 
         Returns:
-            (dict[str, cq.Workplane]): Native models; generated hardware is excluded.
+            (dict[str, cq.Workplane | Mesh]): Native models as Workplanes and
+                explicit meshes as Mesh objects. Generated hardware is excluded.
 
         Raises:
             ValueError: Leaf names are ambiguous; request `names="path"` instead.
@@ -748,7 +750,7 @@ class Assembly:
             key = component.name if names == "leaf" else path
             if key in result:
                 raise ValueError(f"Ambiguous leaf name {key!r}; request names='path'")
-            result[key] = cq.Workplane(obj=component.model)
+            result[key] = component.model if isinstance(component.model, Mesh) else cq.Workplane(obj=component.model)
         return result
 
     def purchased_bom(self):
@@ -759,7 +761,7 @@ class Assembly:
                 containing total quantity and relative instance paths.
 
         Each instance contributes its definition's quantity. Fastener hardware is
-        counted separately by the stable hardware BOM.
+        counted separately by the hardware BOM.
         """
         rows = {}
         for prefix, assembly in self._walk():
@@ -774,7 +776,7 @@ class Assembly:
         return tuple(rows.values())
 
     def embed(self, *, at=Frame(), pose=None):
-        """Freeze a subsystem for inclusion in a hand-authored stable Project.
+        """Freeze a subsystem and expose its resolved geometry and mechanics.
 
         Args:
             at (Frame): Installed placement of this subsystem.
@@ -785,7 +787,7 @@ class Assembly:
                 joints, interfaces, fastenings and purchased quantities.
 
         Raises:
-            ValueError: Leaf names are ambiguous; use a nested design Assembly instead.
+            ValueError: Leaf names are ambiguous; use a nested Assembly instead.
         """
         values = self._normalize_pose(pose)
         result = Embedding(self._snapshot(), at, values)
@@ -793,7 +795,7 @@ class Assembly:
         return result
 
     def as_assembly(self, *, at=Frame(), pose=None, include_hardware=True, kind=None):
-        """Build a placed cadkit.project.Assembly hierarchy.
+        """Build a placed cadkit._project.Assembly hierarchy.
 
         Args:
             at (Frame): Placement of this assembly.
@@ -802,7 +804,7 @@ class Assembly:
             kind (str | None): `manufactured`, `purchased`, or all leaves.
 
         Returns:
-            (cadkit.project.Assembly): Hierarchy with native geometry, names, and colors.
+            (cadkit._project.Assembly): Hierarchy with native geometry, names, and colors.
         """
         return self._resolve(at=at, pose=pose).as_assembly(include_hardware=include_hardware, kind=kind)
 
@@ -821,9 +823,11 @@ class Assembly:
         def convert(tree):
             result = cq.Assembly(name=tree.name)
             for child in tree.children:
-                if isinstance(child, LegacyAssembly):
+                if isinstance(child, PlacedAssembly):
                     result.add(convert(child))
                 else:
+                    if isinstance(child.model, Mesh):
+                        raise ValueError("A CadQuery assembly cannot include Mesh bodies; use the project assembly exporter for a native STEP and mesh omission manifest")
                     result.add(child.model, name=child.name, color=cq.Color(*child.color))
             return result
         return convert(self.as_assembly(at=at, pose=pose, include_hardware=include_hardware, kind=kind))
@@ -890,22 +894,36 @@ class Assembly:
                           for name, value in self._access.items()}
         return frozen
 
-    def as_project(self, *, parameters=(), checks=(), description="", pose=None):
-        """Freeze the definition into the stable CLI and desktop Project contract.
+    def as_project(self, *, parameters=(), checks=(), description="", pose=None,
+                   extra_parts=(), quantities=None, joints=(), interfaces=(), fastenings=()):
+        """Freeze this assembly into an inspectable, exportable Project.
 
         Args:
-            parameters (tuple): Stable Parameter metadata.
-            checks (tuple): Stable Check definitions.
+            parameters (tuple): Discoverable Parameter metadata.
+            checks (tuple): Explicit Check definitions.
             description (str): Project description.
             pose (dict | str | None): Joint positions or named pose for the default view.
+            extra_parts (tuple[Part, ...]): Additional manufacturing definitions,
+                such as uninstalled coupons or variants. An installed definition
+                may also appear here; the same object is counted once.
+            quantities (dict[str, int] | None): Positive manufacturing counts by
+                part name. Defaults to installed instance counts, or one for an
+                uninstalled extra. Counts do not depend on the selected pose.
+            joints (tuple): Additional installed mechanical declarations.
+            interfaces (tuple): Additional installed contact/clearance contracts.
+            fastenings (tuple): Additional installed hardware stacks. Explicit
+                installed contracts require a static assembly; use feature-bound
+                connections and attachments when hardware must follow motion.
 
         Returns:
-            (cadkit.project.Project): Adapter with manufactured Parts, installed tree,
+            (cadkit.Project): Snapshot with manufacturing inventory, installed tree,
                 mechanics, and named poses. Repeated manufactured definitions contribute
                 instance quantities; purchased components stay outside the print registry.
         """
         values = self._normalize_pose(pose)
-        return DesignProject(self._snapshot(), values, parameters=parameters, checks=checks, description=description)
+        return Project(self._snapshot(), values, parameters=parameters, checks=checks,
+                             description=description, extra_parts=extra_parts, quantities=quantities,
+                             joints=joints, interfaces=interfaces, fastenings=fastenings)
 
 
 @dataclass(frozen=True)
@@ -1077,7 +1095,7 @@ class Resolution:
             def visit(tree, prefix=""):
                 for child in tree.children:
                     path = _path(prefix, child.name)
-                    if isinstance(child, LegacyAssembly):
+                    if isinstance(child, PlacedAssembly):
                         yield from visit(child, path)
                     else:
                         yield replace(child, name=_path("Hardware", path))
@@ -1097,7 +1115,7 @@ class Resolution:
                         children.append(child)
                 elif path in components:
                     children.append(components[path])
-            return LegacyAssembly(assembly.name, tuple(children))
+            return PlacedAssembly(assembly.name, tuple(children))
         tree = visit(self.definition, "")
         fastenings, joints, interfaces = self.fastenings(), self.joints(), self.interfaces()
         hardware = hardware_assembly(fastenings) if include_hardware else None
@@ -1106,34 +1124,57 @@ class Resolution:
 
 
 @dataclass(frozen=True)
-class _ResolvedAssembly(LegacyAssembly):
+class _ResolvedAssembly(PlacedAssembly):
     _joints: tuple = field(default=(), repr=False, compare=False)
     _interfaces: tuple = field(default=(), repr=False, compare=False)
     _fastenings: tuple = field(default=(), repr=False, compare=False)
 
 
-class DesignProject(Project):
-    """Compatibility adapter with pose-coherent geometry and mechanical metadata."""
-    def __init__(self, definition, pose, *, parameters=(), checks=(), description=""):
+class Project(ProjectRecord):
+    """An assembly snapshot shared by the CLI, desktop and exporters.
+
+    Create one with `Assembly.as_project()`. Its manufacturing inventory contains
+    one fabrication record per part definition, with quantities separate from
+    display visibility and pose. Geometry builders remain lazy.
+    """
+    def __init__(self, definition, pose, *, parameters=(), checks=(), description="",
+                 extra_parts=(), quantities=None, joints=(), interfaces=(), fastenings=()):
         self._definition = definition
         self._default_pose = dict(pose)
+        self._extra_joints = tuple(joints)
+        self._extra_interfaces = tuple(interfaces)
+        self._extra_fastenings = tuple(fastenings)
+        if (self._extra_joints or self._extra_interfaces or self._extra_fastenings) and definition._motion_index():
+            raise ValueError("Explicit installed contracts require a static assembly; bind moving mechanics to features")
         resolution = definition._resolve(pose=pose)
         counts = Counter(id(i.part) for i, _ in resolution.leaves.values() if isinstance(i.part, Part))
-        parts, identities = {}, {}
+        identities = {}
+        def register(part):
+            if not isinstance(part, Part):
+                raise TypeError("extra_parts must contain Part definitions")
+            if part.name in identities and identities[part.name] is not part:
+                raise ValueError(f"Different part definitions share {part.name!r}; name the variant explicitly")
+            identities[part.name] = part
         for instance, _ in resolution.leaves.values():
-            if not isinstance(instance.part, Part):
-                continue
-            name, group = instance.part.name, instance.group or "parts"
-            if name in identities and identities[name] is not instance.part:
-                raise ValueError(f"Different part definitions share {name!r}; name the variant explicitly")
-            if name in parts and parts[name].group != group:
-                raise ValueError("Instances of one part must use the same manufacturing group")
-            identities[name] = instance.part
-            parts[name] = instance.part.as_part(group, quantity=counts[id(instance.part)])
+            if isinstance(instance.part, Part):
+                register(instance.part)
+        for part in extra_parts:
+            register(part)
+        quantities = dict(quantities or {})
+        unknown = quantities.keys() - identities.keys()
+        if unknown:
+            raise ValueError(f"Unknown manufacturing quantity parts: {', '.join(sorted(unknown))}")
+        if any(type(value) is not int or value < 1 for value in quantities.values()):
+            raise ValueError("Manufacturing quantities must be positive integers")
+        parts = {name: part.as_part(quantity=quantities.get(name, counts[id(part)] or 1))
+                 for name, part in identities.items()}
         super().__init__(definition.name, tuple(parts.values()), self._components,
                          parameters=tuple(parameters), checks=tuple(checks), description=description,
                          views={name: (lambda _name=name, **options: self._components(pose=_name, **options)) for name in definition._poses},
-                         assembly=self._assembly, joints=resolution.joints(), interfaces=resolution.interfaces(), fastenings=resolution.fastenings())
+                         assembly=self._assembly,
+                         joints=resolution.joints() + self._extra_joints,
+                         interfaces=resolution.interfaces() + self._extra_interfaces,
+                         fastenings=resolution.fastenings() + self._extra_fastenings)
 
     def _options(self, view=None, **options):
         pose = options.pop("pose", view if view is not None else self._default_pose)
@@ -1142,24 +1183,42 @@ class DesignProject(Project):
         return {"pose": pose, **options}
 
     def _components(self, **options):
-        # The stable Project contract expects authored components here.
-        options = self._options(**options)
         options["include_hardware"] = False
-        return self._definition.components(**options)
+        return self.get_components(**options)
 
     def _assembly(self, **options):
-        options = self._options(**options)
         options["include_hardware"] = False
-        return self._definition.as_assembly(**options)
+        return self.get_assembly(**options)
 
     def get_components(self, view=None, **options):
-        options = self._options(view, **options)
-        options.setdefault("include_hardware", True)
-        return self._definition.components(**options)
+        """Build installed components with names scoped to their assembly paths."""
+        def visit(tree, prefix=""):
+            for child in tree.children:
+                path = _path(prefix, child.name)
+                if isinstance(child, PlacedAssembly):
+                    yield from visit(child, path)
+                else:
+                    yield replace(child, name=path)
+        return list(visit(self.get_assembly(view, **options)))
 
     def get_assembly(self, view=None, **options):
+        """Build the installed hierarchy and matching mechanics for a named pose.
+
+        Args:
+            view (str | None): Named pose, or the project's default pose.
+            **options (object): `include_hardware`, `pose` and `kind` selection options.
+        """
         options = self._options(view, **options)
-        return self._definition.as_assembly(**options)
+        include_hardware = options.pop("include_hardware", True)
+        tree = self._definition.as_assembly(include_hardware=False, **options)
+        fastenings = tree._fastenings + self._extra_fastenings
+        hardware = hardware_assembly(fastenings) if include_hardware else None
+        if hardware and any(child.name == hardware.name for child in tree.children):
+            raise ValueError("Assembly instance name 'Hardware' conflicts with generated hardware")
+        return replace(tree, children=tree.children + ((hardware,) if hardware else ()),
+                       _joints=tree._joints + self._extra_joints,
+                       _interfaces=tree._interfaces + self._extra_interfaces,
+                       _fastenings=fastenings)
 
     def _mechanics(self, assembly):
         if isinstance(assembly, _ResolvedAssembly):
@@ -1182,7 +1241,7 @@ class DesignProject(Project):
 
 @dataclass(frozen=True)
 class Embedding:
-    """Frozen subsystem adapter for a hand-authored stable Project.
+    """Frozen subsystem output with consistently scoped geometry and mechanics.
 
     Obtain this with `assembly.embed()`. Methods expose components, manufacturing
     parts, and installed mechanics with consistent references. Leaf names must

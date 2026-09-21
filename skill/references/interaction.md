@@ -15,7 +15,7 @@ the app is part of the task.
 
 Call `get_state` to confirm `projectDir`, `reference`, build `status` and
 `revision`. Read the current selection and Part definition, then use `inspect`
-for details. A Part may have many installed Components or none, as with a
+for details. A Part may have many installed instances or none, as with a
 calibration coupon. Use a Component ID for an installed location and a Part
 name for manufacturing metadata or export. With no selected item, continue
 from an explicitly named target or ask which item the user means.

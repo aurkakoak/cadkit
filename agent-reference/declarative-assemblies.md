@@ -1,6 +1,6 @@
-# Declarative assembly authoring
+# Assemblies and motion
 
-`cadkit.design` builds physical definitions on native CadQuery geometry. A `Part`
+`cadkit` composes local native or explicit mesh geometry. A `Part`
 owns a local body builder, manufacturing process, named features and named `Frame`
 ports. `Purchased` supplies the same geometry/port contract with supplier metadata
 and a quantity; it is excluded from printable parts. An `Assembly` owns instances
@@ -14,14 +14,14 @@ joint adds a rotation about the datum's positive Z axis; a slider adds a transla
 along positive Z. Positions are degrees and millimetres respectively.
 
 ```python
-from cadkit import design as d
+import cadkit as ck
 
-head = d.Assembly("tool-head")
+head = ck.Assembly("tool-head")
 housing = head.add("housing", housing_definition)
 rotor = head.add("rotor", rotor_definition)
 head.fix(housing)
 azimuth = head.connect(
-    "azimuth", d.Revolute(position=35, limits=(-180, 180)),
+    "azimuth", ck.Revolute(position=35, limits=(-180, 180)),
     parent=housing.port("bearing-axis"),
     child=rotor.port("bearing-axis"),
 )
@@ -40,7 +40,7 @@ A nested assembly publishes only the datums its callers need:
 ```python
 stage.export_port("bearing-axis", stage.instances["rotor"].port("bearing-axis"))
 rotating = head.add("rotating-stage", stage)
-head.connect("azimuth", d.Revolute(position=35),
+head.connect("azimuth", ck.Revolute(position=35),
              parent=housing.port("bearing-axis"),
              child=rotating.port("bearing-axis"))
 ```
@@ -93,12 +93,12 @@ alter geometry.
 
 ## One graph for the desktop and exports
 
-`as_project()` takes a recursive snapshot for the existing Cadkit desktop, CLI,
+`as_project()` takes a recursive snapshot for the CadKit desktop, CLI,
 validation and export APIs. Named poses become views. Geometry, generated hardware,
 joints, contact regions and access envelopes resolve from the same selected pose.
 Later edits to the source graph cannot alter an existing snapshot.
 
-- `components()` returns native, installed components with unique relative paths.
+- `components()` returns installed components with unique relative paths.
 - `models(kind="manufactured", names="leaf")` supplies CadQuery Workplanes for
   existing native callers; duplicate leaf names require `names="path"`.
 - `as_assembly()` preserves the authored hierarchy for Cadkit inspection.
@@ -108,9 +108,12 @@ Later edits to the source graph cannot alter an existing snapshot.
 - `describe()` exposes the definitions, datums, features and relationships without
   building the part bodies.
 
-A subsystem can be embedded into an existing Cadkit project using `embed(at=...)`.
-Its `parts()`, `components()`, `joints()`, `interfaces()` and `fastenings()` adapt the
-same resolved graph into the flat project contract. The adapter rejects ambiguous
-leaf names. When a host has a different root name, pass its full hardware root to
-`embedding.interfaces(hardware_root="/machine/Hardware")` so generated hardware
-references retain the host's exact tree identity.
+Compose a subsystem by adding its Assembly definition to the parent. Publish
+attachment datums with `export_port`, and use the returned instance's `port()`
+for outer connections. Compile the containing graph with `as_project()` so
+hardware and mechanical paths have the correct root and nested identity.
+
+The compiled manufacturing inventory counts installed Parts independently of
+poses and visibility. `extra_parts=(COUPON,)` adds uninstalled definitions;
+`quantities={"bracket": 6}` selects an explicit manufacturing total. Definition
+groups control manufacturing folders; instance groups control display.

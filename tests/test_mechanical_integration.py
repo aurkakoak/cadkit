@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 import cadquery as cq
 import pytest
-from cadkit import Assembly, Component, Interface, Joint, Part, Project
+from cadkit._project import Assembly, Component, Part, Project
+from cadkit import Interface, Joint
 from cadkit.desktop import Session
 from cadkit.export import build
 from cadkit.cli import main

@@ -1,8 +1,7 @@
 # Nest assemblies and name poses
 
-Use this guide when a moving unit needs to be reused more than once. It uses
-the experimental `cadkit.design` namespace and assumes a
-[working Python environment](install.md#set-up-a-python-project-for-the-cli).
+Use this guide when a moving unit needs to be reused more than once. It assumes
+a [working Python environment](install.md#set-up-a-python-project-for-the-cli).
 
 ## Define the reusable unit
 
@@ -11,35 +10,35 @@ the pivot is a placement datum, not a model of a bearing or fastener.
 
 ```python
 import cadquery as cq
-from cadkit import design as d
+import cadkit as ck
 
-BASE = d.Part(
+BASE = ck.Part(
     "base", body=lambda: cq.Workplane("XY").box(
         30, 30, 4, centered=(True, True, False)),
-    manufacture=d.FDM("PETG"),
-    ports={"pivot": d.Frame((0, 0, 4))},
+    manufacture=ck.FDM("PETG"),
+    ports={"pivot": ck.Frame((0, 0, 4))},
 )
-ARM = d.Part(
+ARM = ck.Part(
     "arm", body=lambda: cq.Workplane("XY").box(
         25, 8, 3, centered=(False, True, False)),
-    manufacture=d.FDM("PETG"),
-    ports={"pivot": d.Frame()},
+    manufacture=ck.FDM("PETG"),
+    ports={"pivot": ck.Frame()},
 )
 
-unit = d.Assembly("pivot-unit")
+unit = ck.Assembly("pivot-unit")
 base = unit.add("base", BASE)
 arm = unit.add("arm", ARM)
 unit.fix(base)
 unit.connect(
-    "swing", d.Revolute(position=0, limits=(-90, 90)),
+    "swing", ck.Revolute(position=0, limits=(-90, 90)),
     parent=base.port("pivot"), child=arm.port("pivot"),
 )
 
-machine = d.Assembly("two-arms")
+machine = ck.Assembly("two-arms")
 left = machine.add("left", unit)
 right = machine.add("right", unit)
-machine.fix(left, at=d.Frame((-40, 0, 0)))
-machine.fix(right, at=d.Frame((40, 0, 0)))
+machine.fix(left, at=ck.Frame((-40, 0, 0)))
+machine.fix(right, at=ck.Frame((40, 0, 0)))
 machine.name_pose("open", {"left/swing": 60, "right/swing": -60})
 
 PROJECT = machine.as_project()
@@ -62,7 +61,7 @@ uv run cadkit --project motion:PROJECT assembly --view open --output build/open.
 ```
 
 The installed arms move; their manufacturing definitions and print orientations
-stay the same. Each manufactured definition has quantity two in the adapted
+stay the same. Each manufactured definition has quantity two in the compiled
 Project. Both instances share the unit's definition, but `left/swing` and
 `right/swing` address separate motion coordinates.
 
@@ -93,4 +92,4 @@ mechanism is collision-free throughout its travel or that a physical pivot
 exists. Add the intended hardware, interfaces and motion tests separately.
 
 See [assembly reference](../reference/design-assemblies.md) for exported ports,
-coupled motion and embedding into an existing Project.
+coupled motion and project compilation.

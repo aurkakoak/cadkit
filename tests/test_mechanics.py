@@ -5,8 +5,8 @@ import runpy
 from pathlib import Path
 import cadquery as cq
 import pytest
-from cadkit import (Project, Part, Component, Assembly, Joint, Interface, Fastening,
-                    FastenerSpec, HardwareItem, FastenerSite, AccessEnvelope)
+from cadkit._project import Project, Part, Component, Assembly
+from cadkit import Joint, Interface, Fastening, FastenerSpec, HardwareItem, FastenerSite, AccessEnvelope
 from cadkit.mechanics import component_index
 
 

@@ -54,7 +54,9 @@ included as `references/desktop.md` in the packaged skill.
 .venv/bin/cadkit blender --assets render/exploded_exports/scene.json --output render/exploded.blend --animation
 ```
 
-`render-assets` supports `--view` and `--printed-only`. The scene manifest owns
+`render-assets` supports `--view` and `--printed-only`. The latter selects only
+installed manufactured parts, excluding purchased components and fastening
+hardware. The scene manifest owns
 installed component geometry and optional explosion offsets. Blender converts
 mm to metres exactly once. `blender` does not require `--project`; it consumes
 that manifest. Use `--blender /path/to/blender` when it is not on PATH.

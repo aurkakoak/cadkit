@@ -8,7 +8,7 @@ def scoped_report(report, assembly, parts, *, fastenings):
 
     Args:
         report (dict): Complete installed mechanical report.
-        assembly (cadkit.project.Assembly): Corresponding installed hierarchy.
+        assembly (cadkit._project.Assembly): Corresponding installed hierarchy.
         parts (list): Requested stable manufacturing Parts.
         fastenings (tuple): Declarations used to include their related hardware.
 

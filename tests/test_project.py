@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 import cadquery as cq
 import pytest
-from cadkit import Project, Part, Component, Check
+from cadkit._project import Project, Part, Component
+from cadkit import Check
 from cadkit.export import build, run_checks, export_render_assets
 from cadkit.geometry import cube
 

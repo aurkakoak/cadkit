@@ -4,7 +4,7 @@ from types import MappingProxyType
 from typing import Callable, Mapping
 
 from .frames import Frame, name
-from .parts import native
+from .parts import definition_body, apply_features
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,8 @@ class Purchased:
 
     Args:
         name: Stable definition name.
-        body: Zero-argument builder returning a valid native CadQuery solid.
+        body: Zero-argument builder returning a valid native solid, native
+            compound, or explicit `cadkit.geometry.Mesh`.
         ports: Named local Frames.
         features: Explicit feature operations. Use `supplied=True` mount roles
             for already present supplier geometry; other features modify the body.
@@ -51,16 +52,8 @@ class Purchased:
             raise ValueError("Purchased ports must be local Frames")
 
     def build(self):
-        """Build and copy the native body, then apply any explicit owned feature operations."""
-        body = native(self.body()).copy()
-        # Supplied features describe a vendor component. Geometry-changing
-        # features are explicit if a purchased blank is subsequently machined.
-        for key, feature in self.features.items():
-            try:
-                body = native(feature.apply(body))
-            except Exception as exc:
-                raise ValueError(f"{self.name}/features/{key}: {exc}") from exc
-        return body
+        """Build a local body and apply owned native features, retaining its representation."""
+        return apply_features(self.name, definition_body(self.body()), self.features)
 
     def describe(self):
         return {"schema_version": 1, "name": self.name, "kind": "purchased",

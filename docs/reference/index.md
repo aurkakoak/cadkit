@@ -6,28 +6,17 @@ library source using [mkdocstrings](https://mkdocstrings.github.io/python/).
 The pages choose the public objects to show; they do not import CAD geometry
 or run builders while building the documentation.
 
-## Choose a namespace
-
-| Namespace | Purpose | Status |
-| --- | --- | --- |
-| `cadkit` / `cadkit.project` | Part registry, installed Components, project metadata and checks | Stable 0.2 contract |
-| `cadkit.design` | Local parts with owned features, frames, mounts and resolved assemblies | Experimental, implemented API |
-| `cadkit.fasteners` / `cadkit.mechanics` | Catalogue hardware and installed mechanical contracts | Stable 0.2 contract |
-| `cadkit.geometry`, `fits`, `math` | Optional geometry and dimensional helpers | Public helpers |
-| `cadkit.export`, `preflight`, `viewer`, `cache` | Validation, outputs and supporting utilities | Public helpers |
-
-`cadkit.Part` and `cadkit.design.Part` are different classes. Likewise,
-`cadkit.Assembly` groups already placed geometry, while `cadkit.design.Assembly`
-resolves local definitions through connection datums. Declarative
-`assembly.as_project()` produces the stable Project consumed by the CLI and app.
-
 ## Python API
+
+Use `import cadkit as ck` to define parts, frames, features and assemblies.
+`PROJECT = assembly.as_project()` supplies the CLI, desktop and exporters with
+manufacturing inventory, installed geometry, parameters and checks.
 
 | Topic | Objects and operations |
 | --- | --- |
-| [Project model](project.md) | `Project`, `Part`, `Component`, `Assembly`, `Parameter`, `Check` |
-| [Declarative parts and frames](design-parts.md) | `Part`, `Feature`, `FDM`, `LaserCut`, `Purchased`, `Frame`, patterns |
-| [Declarative assemblies and motion](design-assemblies.md) | Placement, connections, poses, composition and adapters |
+| [Project model](project.md) | Compiled `Project`, inventory, quantities, `Parameter` and `Check` |
+| [Parts and frames](design-parts.md) | `Part`, `Feature`, `FDM`, `LaserCut`, `Purchased`, `Frame`, patterns |
+| [Assemblies and motion](design-assemblies.md) | Instances, placement, connections, poses and composition |
 | [Manufacturing features](design-features.md) | Holes, slots, pockets, seats, bosses and finishing intent |
 | [Mounts and attachments](design-mounts.md) | Insert/threaded stacks, captive nuts and set screws |
 | [Fasteners](fasteners.md) | Catalogue specifications, hardware items and located sites |

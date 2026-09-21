@@ -1,25 +1,22 @@
-# Declarative authoring
+# Parts and features
 
-`from cadkit import design as d` imports CadKit's implemented native authoring
-layer. Existing `cadkit.Part`, `cadkit.Assembly`, Project loaders, viewers and
-exporters keep their existing API. The `cadkit.design` namespace is experimental;
-these guides document its current interface.
-
-CadQuery owns native geometry. A `d.Part` owns its lazy CadQuery body builder and
-an ordered dictionary of named manufacturing features. Shared `InsertMount` and
-`ThreadedMount` recipes supply matched roles on participating parts. A
-`d.Assembly` binds features and local ports, owns nested composition and motion,
-and derives the existing geometry, manufacturing and mechanical contracts. See the
-complete runnable example in [`examples/insert_mount.py`](examples/insert_mount.py).
+`import cadkit as ck` imports CadKit's authoring objects. CadQuery owns native
+geometry. A `ck.Part` owns its lazy body builder and an ordered dictionary of
+named manufacturing features. Shared `InsertMount` and `ThreadedMount` recipes
+supply matched roles on participating parts. A `ck.Assembly` binds features and
+local ports, owns nested composition and motion, and compiles geometry,
+manufacturing inventory and mechanical evidence for the desktop and exporters.
+See the complete runnable example in
+[`examples/insert_mount.py`](examples/insert_mount.py).
 
 ```python
-from cadkit import design as d
+import cadkit as ck
 
 # MOUNT is one shared InsertMount; COVER and BASE explicitly own its two roles.
-assembly = d.Assembly("fixture")
+assembly = ck.Assembly("fixture")
 base = assembly.add("base", BASE)
 cover = assembly.add("cover", COVER)
-assembly.fix(base, at=d.Frame((0, 0, 40)))
+assembly.fix(base, at=ck.Frame((0, 0, 40)))
 assembly.connect("mount", MOUNT,
     through=cover.feature("mount"), into=base.feature("mount"))
 PROJECT = assembly.as_project()
@@ -32,41 +29,45 @@ placement fails explicitly. Both mount role frames lie on the mating plane with
 same clocking. A rigid connection aligns those frames. A fixed assembly datum
 can translate and rotate both the parts and their hardware.
 
-`Part.build()` returns a native shape in design coordinates. `Part.as_part(group)`
-adapts it to the existing manufacturing registry. `FDM(material, print_rotation)`
-sets explicit manufacturing metadata and export orientation, with the existing
-Z-only bed normalization. Material can be `"unspecified"`; no material is inferred.
-`Assembly.as_project()` takes a snapshot and derives manufacturing quantities from
-instances. Separate graph edits cannot stale a previously created Project.
+`Part.build()` returns local design geometry. `Part.build_for_print()` applies
+fabrication orientation and Z-only bed normalization. `FDM(material,
+print_rotation)` records the process; the optional keyword `print_frame` supplies
+an explicit design-to-fabrication frame instead of Euler rotations. Material can
+be `"unspecified"`; no material is inferred.
 
-Builders return one valid CadQuery shape or an explicit compound. Feature
+`Assembly.as_project()` takes a snapshot and derives manufacturing quantities
+from instances. Supply extra definitions with `extra_parts`, quantity totals with
+`quantities`, and project evidence with `parameters` and `checks`. Later graph
+edits cannot change a previously created Project.
+
+Native builders return one valid CadQuery shape or an explicit compound. Feature
 application verifies that every hole site intersects the body. A blind pocket's
 overshoot extends through its open end only; its nominal bottom stays fixed.
-Optional `Part.finalize` applies a final native geometry operation, such as
-an outer-face partition for reliable STEP export. It does not alter
-the authored feature metadata; final geometry still needs the project's checks.
+Optional `Part.finalize` applies a final native geometry operation, such as an
+outer-face partition for reliable STEP export. It does not alter the authored
+feature metadata; final geometry still needs the project's checks.
 
-The resulting legacy Part's `describe()` includes a `design` object containing
-named features, frames, manufacturing information and secondary operations
-with feature provenance. Design assembly components expose the same object as metadata to the
-existing desktop worker and agent tools. Feature-specific editing and face
-selection are not currently available in the desktop UI.
+Part descriptions contain named features, frames, manufacturing information and
+secondary operations with feature provenance. Installed component metadata exposes
+the same information to the desktop and agent tools. Feature-specific editing and
+face selection are not currently available in the desktop UI.
 
-`InsertMount` reuses `cadkit.FastenerSpec` for supplier identity and catalogue
-geometry. It derives grip, hardware offsets and bottom depth from the part role,
-then delegates engagement and other mechanical checks to the existing engine.
-Screw lengths and pocket dimensions stay explicit. Supplied access envelopes and
-bounded interfaces remain authoritative: aligned frames alone do not establish
-physical contact, allowable interference, stock thickness or load capacity.
+`InsertMount` uses `ck.FastenerSpec` for supplier identity and catalogue geometry.
+It derives grip, hardware offsets and bottom depth from the part role, then
+checks engagement and other mechanical requirements. Screw lengths and pocket
+dimensions stay explicit. Supplied access envelopes and bounded interfaces remain
+authoritative: aligned frames alone do not establish physical contact, allowable
+interference, stock thickness or load capacity.
 
 See [Manufacturing features](manufacturing-features.md) for holes, fits, slots,
 D-bores, seals, bosses, tapping, insert installation and layered mounts. See
-[Declarative assemblies](declarative-assemblies.md) for ports, nested assemblies,
+[Assemblies](declarative-assemblies.md) for ports, nested assemblies,
 revolute/slider joints, gear/rack coupling, named poses, purchased inventory,
-bounded interfaces, driver access and existing-project embedding.
+bounded interfaces and driver access.
 
 Placement is directed and deterministic; it is not a general constraint solver.
 The framework does not infer material, select an unrequested screw length,
 execute secondary operations or certify a physical fit. Purchased envelopes and
-unknown thread depths stay qualified evidence. Native CadQuery solids are the
-authoring boundary; vendor meshes continue through the existing API.
+unknown thread depths stay qualified evidence. Explicit Mesh bodies can use the
+same Part, Purchased and assembly graph. Native-only features and finishing
+operations require a native body; meshes export STL with explicit STEP omissions.

@@ -45,7 +45,7 @@ intersection of two shapes. An empty intersection passes. Failed overlaps
 write witness geometry alongside the report in `build/checks/clearance-failures`.
 
 For example, in a project that defines `installed_box()` and
-`installed_lid()` shape builders, add this check to `Project(checks=...)`:
+`installed_lid()` shape builders, pass this check in `assembly.as_project(checks=(no_overlap,))`:
 
 ```python
 from cadkit import Check
@@ -91,7 +91,8 @@ uv run cadkit --project project:PROJECT assembly --output build/enclosure.step
 ```
 
 This preserves installed component placement rather than print orientation.
-Add `--view service` for a named project view, or `--printed-only` to omit
+Add `--view service` for a named project view, or `--printed-only` to include
+only installed manufactured parts, excluding purchased components and fastening
 hardware. Mesh geometry cannot become native editable STEP; omitted meshes
 are recorded in an accompanying manifest.
 

@@ -167,15 +167,15 @@ test("mechanical contracts share live state, hardware presentation and revision-
     await page.screenshot({ path: "test-results/mechanics-mcp-light.png" });
     await writeFile(
       path.join(dir, "project.py"),
-      source +
-        `
-_original_components = components
-def with_proxy(**options):
-    return _original_components(**options) + [Component(
-        "fixture-proxy", cq.Solid.makeBox(4, 4, 4).translate((-10, -2, 8)),
-        "Reference", metadata={"representation": "envelope"})]
-PROJECT.components = with_proxy
-`,
+      source.replace(
+        "PROJECT = ASSEMBLY.as_project(",
+        `PROXY = ck.Purchased(
+    "fixture-proxy", lambda: cq.Solid.makeBox(4, 4, 4),
+    representation="envelope")
+ASSEMBLY.fix(ASSEMBLY.add("fixture-proxy", PROXY, group="Reference"),
+             at=ck.Frame((-10, -2, 8)))
+PROJECT = ASSEMBLY.as_project(`,
+      ),
     );
     await expect
       .poll(async () => {

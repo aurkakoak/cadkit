@@ -6,13 +6,12 @@ exports, a desktop viewer and agent access. You need a
 
 ## Wrap the builder
 
-Keep the existing geometry function. Register it as a `Part`, then describe
-where an instance of that part appears in the assembly. This complete example
-can be saved as `project.py`:
+Keep the existing geometry function. Define a `Part`, then place its instance in
+an assembly. This complete example can be saved as `project.py`:
 
 ```python
 import cadquery as cq
-from cadkit import Component, Part, Project
+import cadkit as ck
 
 
 def plate():
@@ -20,30 +19,24 @@ def plate():
     return cq.Workplane("XY").box(60, 40, 4)
 
 
-def components(*, include_hardware=True):
-    return [
-        Component(
-            "plate", plate().val().translate((0, 0, 20)),
-            group="structure", part="plate",
-        ),
-    ]
-
-
-PROJECT = Project(
-    "mounting-plate",
-    parts=(Part("plate", plate, group="structure", material="PETG"),),
-    components=components,
+PLATE = ck.Part(
+    "plate", body=plate, manufacture=ck.FDM("PETG"), group="structure",
 )
+assembly = ck.Assembly("mounting-plate")
+assembly.fix(assembly.add("plate", PLATE), at=ck.Frame((0, 0, 20)))
+PROJECT = assembly.as_project()
 ```
 
-The `Part` describes what to manufacture; its builder takes no arguments.
-The `Component` describes one installed instance. Its `part="plate"` connects
-the selected object in the viewer to the manufacturing definition.
+The `Part` describes what to manufacture; its body builder takes no arguments.
+`assembly.add()` creates one instance linked to that definition. `fix()` supplies
+its installed frame without changing the local geometry or manufacturing pose.
 
 Builders may return a CadQuery Workplane or Shape. Return a single shape or an
 explicit compound for several solids; do not rely on several items in a
 Workplane stack being exported together. Keep the builder lazy: pass `plate`,
-not `plate()`.
+not `plate()`. Set `expected_solids` for an intentional multiple-solid definition.
+An explicit `cadkit.geometry.Mesh` body is also supported, with STL output and
+reported STEP omissions; native manufacturing features require native geometry.
 
 ## Check the integration
 
@@ -61,35 +54,36 @@ STEP and a manifest to `build/cadquery`.
 
 Open the same project in the desktop using the
 [launch command for your platform](install.md#open-your-own-project).
-The viewer shows the plate at Z=20; the part export is normalized to the print
-bed. Those are intentionally different placements.
+The viewer shows the plate centered at Z=20; the part export rests on the print
+bed. Those placements serve different purposes.
 
 ## Adapt more than one part
 
-Add one `Part` per manufacturing definition. Add a `Component` for every
+Add one `Part` per manufacturing definition. Call `assembly.add()` for every
 installed instance, with distinct names such as `left-bracket` and
-`right-bracket` referring to the same `part="bracket"`. Set `Part.quantity`
-explicitly; the base `Project` API does not infer it from visible instances.
+`right-bracket` referring to the same definition. Manufacturing quantities follow
+instance counts; use `as_project(quantities={"bracket": 4})` for an explicit total,
+including any spares.
 
-Apply installed transforms in your component builder exactly once. If your
-existing exporter already rotates a part for printing, use the original design
-builder for the `Part` and put that rotation in `print_rotation` instead.
+Put uninstalled coupons and optional variants in
+`as_project(extra_parts=(COUPON,))`, with `production=False` on the definition.
+They remain discoverable and can be exported by name.
 
-Every component or named-view builder must accept `include_hardware=True`,
-even if it has no hardware. CadKit passes that keyword when preparing views
-and exports.
+Apply installed transforms once through fixed frames or connections. If your
+existing exporter rotates a part for printing, use the original design builder
+for the `Part` and put that rotation in `ck.FDM("PETG", print_rotation=(...))`.
+See [nested assemblies](nested-assemblies.md) for reusable units and named poses.
 
-## Preserve the evidence from the old workflow
+## Preserve geometric evidence
 
-Before switching exporters, keep a representative old export and run the
-project's existing tests. Compare native validity, solid count, dimensions and
-the interfaces that matter to your design. Also inspect the assembly visually.
-Matching volume and bounds alone do not establish matching geometry.
+Before switching exporters, retain a representative export and run the project's
+existing tests. Compare native validity, solid count, dimensions and the interfaces
+that matter to your design. Also inspect the assembly visually. Matching volume
+and bounds alone do not establish matching geometry.
 
-Keep custom fabrication commands where CadKit does not cover their output
-format. You can adopt `cadkit.design` features later, one part at a time;
-adoption does not require rewriting your CadQuery model.
+Keep custom fabrication commands where CadKit does not cover their output format.
+Add named features when they help express manufacturing intent or a relationship;
+adoption does not require rewriting your CadQuery body builders.
 
-See [Parts and placement](../explanation/parts-and-placement.md) for the model
-behind this adapter, and the [Project reference](../reference/project.md) for
-all registration fields.
+See [Parts and placement](../explanation/parts-and-placement.md) for the model,
+and the [Project reference](../reference/project.md) for inventory and checks.

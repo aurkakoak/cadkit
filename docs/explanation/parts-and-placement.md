@@ -4,47 +4,42 @@ One bracket design might appear four times in an assembly and be printed in an
 orientation unlike any of those installed positions. Keeping those facts
 separate is central to CadKit's model.
 
-A **Part** is the manufacturing definition: its builder, material, quantity
-and export orientation. A **Component** is an installed instance: its name,
-placed geometry, appearance and link to the Part. An **Assembly** organizes
-instances into a hierarchy. Hardware may be a component without being a
-printable Part; a fit coupon may be a Part without being installed anywhere.
+A **Part** is a manufacturing definition: a local body, manufacturing process,
+features and attachment ports. An **instance** places a definition in an
+**Assembly**. A **Purchased** definition represents supplied hardware or reference
+geometry and contributes to the purchased BOM. A fit coupon can be a Part without
+being installed anywhere.
 
 ## Three coordinate contexts
 
 | Context | What the coordinates mean | Where the transform belongs |
 | --- | --- | --- |
 | Design | The part's own datums and dimensions | In the CadQuery body and its local features |
-| Installed | The part's position in the complete object | In component placement, or a design assembly's resolved frames |
-| Manufacturing | The orientation used for an individual exported part | In the Part's print rotation and bed normalization |
+| Installed | The part's position in the complete object | In fixed frames and assembly connections |
+| Manufacturing | The orientation used for an individual exported part | In `FDM.print_rotation` or `FDM.print_frame`, then bed normalization |
 
 All use millimetres. Moving an installed lid upward should not also move its
 print export above the bed. Rotating a part for printing should not turn the
 assembled lid upside down.
 
-In the base API, `Part.build(for_print=False)` returns the authored shape.
-`Part.build()` applies X, Y and Z rotations in order, then translates Z so the
-lowest point lies on the bed. It does not center X or Y. If a builder already
-returns print-oriented geometry, adding another `print_rotation` would apply
-that choice twice.
+`Part.build()` returns local design geometry. `Part.build_for_print()` applies
+X, Y and Z rotations in order, then translates Z so the lowest point lies on the
+bed. It does not center X or Y. Start with the design body and declare print
+rotation once in `FDM`, or use its `print_frame` for an explicit fabrication
+frame; a builder that already returns print-oriented geometry
+would apply that rotation twice.
 
-`cadkit.design.Part.build()` always returns design geometry. Its `as_part()`
-adapter supplies the base Part's manufacturing behavior. The same word
-`build` therefore has a different default at these two boundaries; use the
-namespace and returned type to make the intended operation clear.
+## Assembly frames compose
 
-## A tree is not always a transform hierarchy
+An Assembly resolves local frames through a directed placement graph, including
+nested assemblies and their motion. Each instance is fixed or connected to one
+placement parent. The resolved transform places each body once. Reusing a nested
+assembly creates independent instances of its parts and scoped motion coordinates.
 
-Base `cadkit.Assembly` objects organize shapes already placed in world
-coordinates. Nesting a Component under a subassembly does not transform it
-again. This lets an existing CadQuery assembly retain its placement logic
-while gaining a useful inspection tree.
-
-`cadkit.design.Assembly` resolves local frames through a directed placement
-graph, including nested assemblies and their motion. It applies the resulting
-transform to each native body and adapts the result to the base assembly
-contract. Exporting a named pose changes installed geometry while leaving
-manufacturing definitions unchanged.
+`assembly.as_project()` takes a snapshot for the CLI, desktop and exporters.
+Exporting a named pose changes installed geometry while leaving manufacturing
+definitions unchanged. Later source-graph edits do not modify an existing Project;
+compile it again after editing the graph.
 
 Feature frames also have a specific purpose. An individual hole's entry frame
 has +Z pointing into the material. Shared mount roles use +Z from the receiver
@@ -59,12 +54,16 @@ such as `left-bracket` and `right-bracket` identify locations. Stable names and
 parentage give the desktop stable paths, so a rebuild can preserve selection,
 visibility and attached notes. Renaming or reparenting creates a new identity.
 
-In the base API, manufacturing quantities are explicit and independent of
-the number of displayed components. A spare or a chosen production set can
-make those counts differ. The design adapter instead counts manufactured
-instances in its assembly snapshot. Hardware quantities come from declared
-sites and stack members, or purchased inventory, rather than printable Part
-counts.
+Manufacturing quantities default to the number of installed instances. Pass
+`quantities={"bracket": 6}` to `as_project()` to make a different production total,
+for example four installed brackets and two spares. Extra definitions such as
+coupons enter through `extra_parts=(COUPON,)`. Set `production=False` on an
+optional definition so it is built only when selected explicitly. Visibility,
+explosion and named poses do not alter manufacturing quantities.
+
+`Part.group` controls manufacturing selections and output folders. An instance's
+`group` controls display organization independently. Hardware quantities come
+from declared fastening sites and stack members, or purchased inventory.
 
 This distinction also explains why STL and assembled STEP serve different
 purposes: the first commonly describes a part ready for manufacturing, while

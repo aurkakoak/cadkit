@@ -4,8 +4,8 @@
 from cadkit import Joint, Interface, Fastening, AccessEnvelope
 ```
 
-The stable mechanical classes describe installed geometry. They do not move
-parts or cut holes. [Declarative assemblies](design-assemblies.md) can generate
+These mechanical records describe installed geometry. They do not move
+parts or cut holes. [Assemblies](design-assemblies.md) can generate
 these records from their local connection graph.
 
 Component references may be an unambiguous leaf name or a full URL-encoded

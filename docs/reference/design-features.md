@@ -1,17 +1,17 @@
 # Manufacturing features
 
 ```python
-from cadkit import design as d
+import cadkit as ck
 ```
 
-These **experimental** objects belong in `d.Part(features={...})`. Features
+These objects belong in `ck.Part(features={...})`. Features
 run in dictionary insertion order. Dimensions and allowances use millimetres;
 angles use degrees. `apply(body)` returns a valid native Shape and `describe()`
 returns metadata; Part calls both at the appropriate boundary.
 
 For entry-based cuts, `at.origin` is the entry face and **+Z points into the
 material**. A downward cut from the top of a 10 mm block uses
-`d.Frame(origin=(0, 0, 10), z=(0, 0, -1))`. This differs from the
+`ck.Frame(origin=(0, 0, 10), z=(0, 0, -1))`. This differs from the
 [mating-datum convention used by mounts](design-mounts.md).
 
 A pattern repeats the feature at local XY sites. `None` means one site at
@@ -21,21 +21,21 @@ depth that spans the material.
 
 ## Round holes
 
-::: cadkit.design.manufacturing.Hole
+::: cadkit.Hole
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-::: cadkit.design.manufacturing.CounterboredHole
+::: cadkit.CounterboredHole
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-::: cadkit.design.manufacturing.CountersunkHole
+::: cadkit.CountersunkHole
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -43,20 +43,20 @@ depth that spans the material.
       members:
         - recess_depth
 
-CounterboredHole uses [`d.Counterbore`](design-mounts.md#cadkit.design.mounts.Counterbore).
+CounterboredHole uses [`ck.Counterbore`](design-mounts.md#cadkit.Counterbore).
 CountersunkHole produces a recess without requiring a rendered countersunk
 fastener; that hardware kind is currently unsupported.
 
 ## Threaded pilots and bearing seats
 
-::: cadkit.design.manufacturing.TappedHole
+::: cadkit.TappedHole
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-::: cadkit.design.manufacturing.BearingSeat
+::: cadkit.BearingSeat
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -66,14 +66,14 @@ fastener; that hardware kind is currently unsupported.
 
 ## Slots and nut traps
 
-::: cadkit.design.manufacturing.Slot
+::: cadkit.Slot
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-::: cadkit.design.manufacturing.NutPocket
+::: cadkit.NutPocket
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -82,14 +82,14 @@ fastener; that hardware kind is currently unsupported.
 
 ## Shaft bores and seals
 
-::: cadkit.design.manufacturing.DBore
+::: cadkit.DBore
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-::: cadkit.design.manufacturing.SealGroove
+::: cadkit.SealGroove
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -98,12 +98,12 @@ fastener; that hardware kind is currently unsupported.
 
 ## Reinforcement
 
-::: cadkit.design.manufacturing.Boss
+::: cadkit.Boss
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-See [InsertBoss](design-mounts.md#cadkit.design.mounts.InsertBoss) for a boss
+See [InsertBoss](design-mounts.md#cadkit.InsertBoss) for a boss
 that also owns its insert pocket and installation intent.

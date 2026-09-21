@@ -1,7 +1,7 @@
 import cadquery as cq
 import pytest
 
-from cadkit import Assembly, Component, Part, Project
+from cadkit._project import Assembly, Component, Part, Project
 from cadkit.desktop import Session
 from cadkit.geometry import mesh
 

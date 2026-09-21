@@ -1,4 +1,4 @@
-"""Small explicit project contract shared by CLIs, viewers, and exporters."""
+"""Internal fabrication and installed-geometry records used by CadKit tools."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict, replace
@@ -56,7 +56,7 @@ class Part:
             placing the lowest point on Z=0. X and Y are not recentered.
         notes: Markdown manufacturing notes.
 
-    See also `cadkit.design.parts.Part` for a definition that owns named features.
+    Author reusable definitions with `cadkit.Part`.
     """
     name: str
     builder: Builder
@@ -156,8 +156,8 @@ class Assembly:
         children: Components and nested assemblies.
         description: Short description for inspection.
 
-    This stable class organizes geometry; it does not solve placement. For local
-    parts connected through frames, use `cadkit.design.assembly.Assembly`.
+    This record contains resolved geometry; authored placement belongs to
+    `cadkit.Assembly`.
     Sibling names must be unique because they define desktop component paths.
     """
 
@@ -205,7 +205,7 @@ class Check:
 
 @dataclass
 class Project:
-    """The stable entry point consumed by the CLI, desktop, exporters, and agents.
+    """Internal project record shared by the CLI, desktop, exporters, and agents.
 
     Args:
         name: Project name and default assembly root name.

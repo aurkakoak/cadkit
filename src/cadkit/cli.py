@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from .project import Project
+from ._project import Project
 from .export import (
     build,
     inspect_model,
@@ -20,16 +20,16 @@ from .export import (
 
 
 def load_project(reference):
-    """Import a stable Project from a Python module reference.
+    """Import a Project from a Python module reference.
 
     Args:
         reference (str): `module:attribute`, with `PROJECT` as the default attribute.
 
     Returns:
-        (Project): Imported project, including declarative `as_project()` adapters.
+        (Project): Imported project, created with `Assembly.as_project()`.
 
     Raises:
-        ValueError: The referenced value is not a stable Project instance.
+        ValueError: The referenced value is not a Project instance.
 
     Importing executes normal module-level Python code; project construction
     should keep geometry in lazy builders.
@@ -227,6 +227,8 @@ def main(argv=None, *, project=None):
             items = project.get_components(
                 args.view, include_hardware=not args.printed_only
             )
+            if args.printed_only:
+                items = [component for component in items if component.part is not None]
             if args.command == "assembly":
                 export_assembly(items, args.output, exploded=args.exploded)
             elif args.command == "render-assets":

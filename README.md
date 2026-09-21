@@ -5,21 +5,21 @@
 ```python
 # project.py
 import cadquery as cq
-from cadkit import design as d
+import cadkit as ck
 
-plate = d.Part(
+plate = ck.Part(
     "plate",
     body=lambda: cq.Workplane("XY").rect(60, 24).extrude(6),
-    manufacture=d.FDM("PETG"),
+    manufacture=ck.FDM("PETG"),
     features={
-        "mounting-holes": d.Hole(
+        "mounting-holes": ck.Hole(
             diameter=4.3, depth=6, through=True,
-            pattern=d.PointPattern(((-20, 0), (20, 0))),
+            pattern=ck.PointPattern(((-20, 0), (20, 0))),
         ),
     },
 )
 
-assembly = d.Assembly("bracket")
+assembly = ck.Assembly("bracket")
 assembly.fix(assembly.add("plate", plate))
 PROJECT = assembly.as_project()
 ```
@@ -44,7 +44,7 @@ Unsigned builds may show a macOS security warning.
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.2.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.3.0"
 # Save the example above as project.py.
 uv run cadkit --project project:PROJECT build all
 ```

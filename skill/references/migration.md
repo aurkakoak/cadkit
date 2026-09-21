@@ -1,4 +1,4 @@
-# Migrating an existing CadQuery project
+# Adopt an existing CadQuery project
 
 The useful outcome is one authoritative consumer model connected to CadKit's
 shared tooling. Preserve geometry and behavior while changing integration.
@@ -12,19 +12,20 @@ and rendering. Record the starting commit, environment, test commands and outcom
 Retain representative native geometry and rendered views before replacing exporters.
 
 Use the consumer's existing tests first. Classify pre-existing failures separately.
-Do not weaken checks just because the new framework has a different abstraction.
+Do not weaken checks just because the integration uses different abstractions.
 
-## Introduce an adapter
+## Define parts and their placement
 
 Install the supplied CadKit package using [installation](install.md). Introduce
-an importable `Project` using [the API contract](api.md). Reuse existing builders
-and transforms. A small adapter over an existing registry can be a good first
-step; avoid maintaining two independent registries long term.
+an importable `PROJECT = assembly.as_project(...)` using [the API contract](api.md).
+Reuse existing local body builders and express installed placement as fixed Frames
+or connections. Preserve one authoritative definition for each manufactured part.
 
-Map manufacturing definitions to Parts and installed instances to Components.
-Preserve stable names and intentional quantity differences. Derive an Assembly
-tree from the installed model for useful subassembly toggles. Describe exposed
-parameters with units and provenance without moving their source of truth.
+Map manufacturing definitions to Parts and add installed instances to an Assembly.
+Preserve stable names and intentional quantity differences through `quantities`.
+Use `extra_parts` for uninstalled coupons and variants; carry their production flag,
+notes, groups and expected solid counts. Describe exposed parameters with units
+and provenance without moving their source of truth.
 
 Switch shared export, preview, Blender and slicing commands to CadKit where
 behavior matches. Retain consumer-specific commands for capabilities outside
@@ -48,14 +49,14 @@ File hashes identify artifacts; they do not prove geometric equivalence because
 equivalent STEP/STL serialization can differ. Bounds and volume alone also do
 not prove equal shape. Keep numerical and visual evidence complementary.
 
-Run existing tests after migration and add only tests that cover changed
+Run existing tests after integration and add only tests that cover changed
 boundaries or previously untested requirements. A mock slicer validates command
 wiring and reporting; label it as a mock and distinguish it from a real slicer
 run. Desktop mocks are likewise not evidence that the actual consumer loaded.
 
 ## Report adoption gaps
 
-Keep a migration report in the consumer with the release ID and manifest hash,
+Keep an adoption report in the consumer with the release ID and manifest hash,
 starting commit, environment, baseline and final commands/results, parity checks,
 retained custom adapters and unresolved limitations. Record failed commands and
 documentation/API gaps when they happen, including workarounds and whether they

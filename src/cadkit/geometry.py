@@ -49,6 +49,13 @@ class Mesh:
         )
         return Mesh(self.manifold.transform(matrix[:3]))
 
+    def moved(self, location):
+        """Return a mesh placed by a CadQuery Location, retaining its representation."""
+        transform = location.wrapped.Transformation()
+        matrix = np.array([[transform.Value(row, column) for column in range(1, 5)]
+                           for row in range(1, 4)])
+        return Mesh(self.manifold.transform(matrix))
+
 
 def shape(value):
     """Unwrap a Workplane's first value; preserve Shapes, Meshes, and `None`.

@@ -1,11 +1,11 @@
 # Mounts and attachments
 
 ```python
-from cadkit import design as d
+import cadkit as ck
 from cadkit import FastenerSpec
 ```
 
-These **experimental** recipes share hardware dimensions between explicitly
+These recipes share hardware dimensions between explicitly
 owned part features. Use the same mount object to create every matching role,
 then bind those roles with an [assembly connection](design-assemblies.md).
 Matching values on two separate mount objects are not enough.
@@ -24,7 +24,7 @@ Each intermediate instance needs its own placement.
 
 ## Insert mount
 
-::: cadkit.design.mounts.InsertMount
+::: cadkit.InsertMount
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -40,7 +40,7 @@ Each intermediate instance needs its own placement.
 
 ## Threaded mount
 
-::: cadkit.design.mounts.ThreadedMount
+::: cadkit.ThreadedMount
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -56,14 +56,14 @@ Each intermediate instance needs its own placement.
 
 ## Pocket and recess dimensions
 
-::: cadkit.design.mounts.Counterbore
+::: cadkit.Counterbore
     options:
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
       members: false
 
-::: cadkit.design.mounts.InsertPocket
+::: cadkit.InsertPocket
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -71,7 +71,7 @@ Each intermediate instance needs its own placement.
       members:
         - feature
 
-::: cadkit.design.mounts.InsertBoss
+::: cadkit.InsertBoss
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -80,7 +80,7 @@ Each intermediate instance needs its own placement.
 
 ## Resulting role
 
-::: cadkit.design.mounts.MountFeature
+::: cadkit.MountFeature
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -97,7 +97,7 @@ Use `assembly.attach()` for individually named features within an already
 placed part or set of parts. These recipes derive hardware positions from
 the features. They do not invent receiving geometry or a placement relationship.
 
-::: cadkit.design.attachments.CaptiveNutFastening
+::: cadkit.CaptiveNutFastening
     options:
       show_root_heading: true
       show_root_full_path: false
@@ -105,7 +105,7 @@ the features. They do not invent receiving geometry or a placement relationship.
       members:
         - describe
 
-::: cadkit.design.attachments.SetScrew
+::: cadkit.SetScrew
     options:
       show_root_heading: true
       show_root_full_path: false

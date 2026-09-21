@@ -13,11 +13,15 @@ test("MCP controls the live view and slicer jobs without a second CAD session", 
   await mkdir(profile);
   const fixture = `
 import cadquery as cq
-from cadkit import Assembly, Component, Part, Project
+import cadkit as ck
 a = cq.Workplane('XY').box(10, 20, 30).val()
-left = Component('left', a, 'blocks', part='block')
-right = Component('right', a.translate((15, 0, 0)), 'blocks')
-PROJECT = Project('fixture', (Part('block', lambda: a, 'blocks', material='PETG', quantity=2, print_rotation=(90,0,0)),), lambda: [left,right], assembly=lambda: Assembly('fixture',(Assembly('blocks',(left,right)),)))
+part = ck.Part('block', lambda: a, ck.FDM('PETG', (90,0,0)), group='blocks')
+blocks = ck.Assembly('blocks')
+blocks.fix(blocks.add('left', part))
+blocks.fix(blocks.add('right', ck.Purchased('reference', lambda: a)), at=ck.Frame((15, 0, 0)))
+assembly = ck.Assembly('fixture')
+assembly.fix(assembly.add('blocks', blocks))
+PROJECT = assembly.as_project(quantities={'block': 2})
 `;
   await writeFile(path.join(dir, "project.py"), fixture);
   const mock = path.join(dir, "mock-slicer");

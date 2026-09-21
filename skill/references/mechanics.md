@@ -1,6 +1,6 @@
 # Joints, interfaces and fastenings
 
-CadKit 0.2 makes mechanical intent part of the Project contract. These three
+CadKit compiles mechanical intent into the Project. These three
 collections are discoverable in Python, CLI JSON, the desktop Connections tab
 and MCP. Declarations describe the consumer's geometry; they do not silently
 cut or reposition printed parts.
@@ -74,7 +74,7 @@ such as `thread_diameter` and `thread_pitch` allow thread-size compatibility che
 attributes remain unverified rather than inferred from an approximate solid.
 
 For non-fastener reference geometry, mark known packaging approximations with
-`Component(metadata={"representation": "envelope"})`. Overlaps involving these
+`Purchased(..., representation="envelope")`. Overlaps involving these
 or fastener envelopes are possible interference, not confirmed collisions;
 interface checks retain the nominal result as evidence and remain unverified.
 Collision coverage is partial whenever approximate geometry participates.
@@ -82,15 +82,20 @@ Collision coverage is partial whenever approximate geometry participates.
 The generated hierarchy is `Hardware / fastening / site / item`; every instance
 has its own stable component ID and spec/fastening metadata. Hardware is excluded
 from printable Parts. BOM counts come from actual sites and stack members,
-not solid counts or `Part.quantity`. An unlocated fastening can declare
+not solid counts or manufacturing quantities. An unlocated fastening can declare
 `quantity`, but its geometric coverage remains unverified. The BOM covers
 **declared fastenings**, not unmodelled screws elsewhere in the consumer.
 
-Hardware declarations currently target the default authored assembly pose.
-The `include_hardware` option controls its visibility/export inclusion. Named
-views or explicit pose options omit nominal hardware to avoid incorrect
-placements. Declare pose-dependent builders before relying on hardware in
-alternative configurations; joint position metadata does not perform that work.
+Graph connections and attachments resolve hardware in the selected assembly
+pose. The `include_hardware` option controls visibility/export inclusion, without
+changing the manufacturing inventory. Use graph interfaces and access envelopes
+for moving units so validation resolves their geometry in the same pose.
+
+Explicit `Joint`, `Interface` and `Fastening` records can be passed through
+`assembly.as_project(joints=..., interfaces=..., fastenings=...)` for a static
+assembly. They describe installed project coordinates and cannot be combined
+with motion edges. A Joint record alone never moves geometry; use `Revolute`
+or `Slider` in an assembly connection to declare placement and motion.
 
 ## Interfaces and validation
 

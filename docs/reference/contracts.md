@@ -17,10 +17,9 @@ consumers should use named fields rather than positional ordering.
 | Rendering RGB | Three values from 0 to 1 |
 | Blender scene geometry | Scaled from millimetres to metres by the Blender boundary |
 
-Native Workplanes are reduced with `.val()` by the stable project model.
-Return an explicit compound when multiple solids are intended. Declarative
-Part builders require a single native value or explicit compound and reject
-implicit multi-value Workplane stacks.
+Part builders require one native Workplane value, a Shape, an explicit compound,
+or an explicit Mesh. Use a compound when multiple native solids are intended;
+implicit multi-value Workplane stacks are rejected.
 
 ## Project description
 
@@ -38,8 +37,18 @@ implicit multi-value Workplane stacks.
 | `mechanics` | Joints, interfaces, fastenings and hardware BOM descriptions |
 
 This description is lazy. It does not prove that builders succeed or that
-registered checks pass. Declarative adapters add their design graph and
+registered checks pass. Compiled projects include their design graph and
 manufacturing-operation metadata.
+
+Each manufacturing record includes `print_rotation`: X/Y/Z angles in degrees.
+When a definition supplies `FDM.print_frame`, those angles describe the frame's
+orientation and the record also contains `print_frame` with `origin`, `x` and
+`z` vectors. The frame is the design-to-fabrication transform before Z bed
+normalization; it replaces the rotation transform rather than adding another
+rotation. Exported geometry already includes fabrication placement.
+
+The desktop part inspector shows the orientation and, when a frame is present,
+its X/Y offset. Installed assembly placement remains independent of these fields.
 
 ## Fabrication build
 
@@ -124,7 +133,7 @@ zero intersection volume, which is why a `contact_pair` distance test exists.
 
 `cadkit assembly --output assembly.step` also writes `assembly.json` with
 `schema_version`, `units`, `mesh_components_omitted_from_step`, and `note`.
-Names and colors are retained without fusing the installed Components.
+Names and colors are retained without fusing the installed instances.
 Explicit meshes remain available in the app and render assets; they are not
 converted into nominally editable STEP triangle faces.
 

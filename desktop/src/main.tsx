@@ -1159,7 +1159,15 @@ function App() {
                       <dt>Group</dt>
                       <dd>{title(part.group)}</dd>
                       <dt>Print rotation</dt>
-                      <dd>{part.print_rotation.join("°, ")}°</dd>
+                      <dd>{part.print_rotation.map((angle) => Number(angle.toFixed(2))).join("°, ")}°</dd>
+                      {part.print_frame && (
+                        <>
+                          <dt>Print offset</dt>
+                          <dd>
+                            X {part.print_frame.origin[0]} mm, Y {part.print_frame.origin[1]} mm
+                          </dd>
+                        </>
+                      )}
                       <dt>Use</dt>
                       <dd>
                         {part.production ? "Production" : "Optional / coupon"}

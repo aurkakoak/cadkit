@@ -5,7 +5,8 @@ from itertools import combinations
 import cadquery as cq
 import pytest
 
-from cadkit import AccessEnvelope, Assembly, Component, Fastening, Interface, Project
+from cadkit._project import Assembly, Component, Project
+from cadkit import AccessEnvelope, Fastening, Interface
 from cadkit import mechanics
 
 

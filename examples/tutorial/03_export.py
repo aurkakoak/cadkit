@@ -20,12 +20,12 @@ def lid_body():
     return cq.Workplane("XY").rect(WIDTH, DEPTH).extrude(LID_THICKNESS)
 
 
-from cadkit import design as d
+import cadkit as ck
 
-BOX = d.Part("box", box_body, manufacture=d.FDM("PETG"))
-LID = d.Part("lid", lid_body, manufacture=d.FDM("PETG"))
+BOX = ck.Part("box", box_body, manufacture=ck.FDM("PETG"))
+LID = ck.Part("lid", lid_body, manufacture=ck.FDM("PETG"))
 
-DESIGN = d.Assembly("enclosure")
+DESIGN = ck.Assembly("enclosure")
 box = DESIGN.add("box", BOX, color=(0.32, 0.58, 0.72))
 lid = DESIGN.add("lid", LID, color=(0.86, 0.70, 0.40), explode=(0, 0, 20))
 DESIGN.fix(box)

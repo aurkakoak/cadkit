@@ -20,7 +20,6 @@ If you already have a project, go directly to [installation](how-to/install.md),
 [adopting CadQuery code](how-to/adopt-cadquery.md) or
 [connecting an agent](how-to/connect-an-agent.md).
 
-The Python reference describes the implemented API. `cadkit` contains the
-established project model; `cadkit.design` is the experimental declarative
-authoring layer used in the tutorial. Both produce projects that the desktop
-app and CLI can open. See [how they fit together](explanation/cadquery-and-cadkit.md).
+Use `import cadkit as ck` to define parts, features and assemblies. Compile an
+assembly with `as_project()` to open it in the desktop or CLI. See
+[how CadQuery and CadKit fit together](explanation/cadquery-and-cadkit.md).

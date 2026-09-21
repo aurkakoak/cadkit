@@ -82,6 +82,7 @@ export interface Part {
   description: string;
   production: boolean;
   print_rotation: [number, number, number];
+  print_frame?: { origin: Vector; z: Vector; x: Vector };
   notes: string;
 }
 export interface Component {

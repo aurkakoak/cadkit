@@ -29,9 +29,9 @@ Before handing a release to a consumer agent:
    and run its build/Electron tests against that fresh Python. Label mock slicer
    evidence accurately. Verify the release still matches its manifest afterward.
 5. Checkpoint the consumer's current work. Install the copied skill and start a
-   fresh task/worktree from that checkpoint, with no inherited migration chat.
+   fresh task from that checkpoint, with no inherited implementation discussion.
 
-The migration brief should specify outcomes and allowed materials, not an
+The adoption brief should specify outcomes and allowed materials, not an
 implementation. It should require the consumer's own baseline, parity evidence
 and an adoption report. Give it the release path and normal setup instructions.
 Reading the installed framework source is possible for an open-source consumer;

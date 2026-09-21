@@ -12,7 +12,8 @@ uv run cadkit --project project:PROJECT render-assets --output-dir render/export
 
 The output includes component meshes and `scene.json`, with installed
 placement, materials and optional explosion offsets. Add `--printed-only` to
-exclude hardware, or `--view service` to select a named project view.
+include only installed manufactured parts, excluding purchased components and
+fastening hardware. Use `--view service` to select a named project view.
 
 ## Make a still image
 

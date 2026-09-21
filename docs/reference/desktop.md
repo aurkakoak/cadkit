@@ -33,7 +33,7 @@ Python environment with the project installed.
 ## Object identity and rebuilds
 
 Part names identify manufacturing definitions. Component IDs identify installed
-instances; one Part can have several Components or no installed instance.
+instances; one Part can have several instances or no installed instance.
 Assembly paths use URL-encoded names and must be unique among siblings.
 Renaming or reparenting an object changes its identity.
 

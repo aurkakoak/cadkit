@@ -114,8 +114,8 @@ nav:
   - Reference:
       - reference/index.md
       - Project model: reference/project.md
-      - Declarative parts and frames: reference/design-parts.md
-      - Declarative assemblies and motion: reference/design-assemblies.md
+      - Parts and frames: reference/design-parts.md
+      - Assemblies and motion: reference/design-assemblies.md
       - Manufacturing features: reference/design-features.md
       - Mounts and attachments: reference/design-mounts.md
       - Fasteners and hardware: reference/fasteners.md
