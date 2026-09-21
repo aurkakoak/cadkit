@@ -2,13 +2,17 @@
   "name": "@cadkit/desktop",
   "version": "0.2.0",
   "description": "A desktop workbench for CadKit projects",
-  "main": "electron/main.mjs",
+  "main": "electron/entry.mjs",
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "start": "npm run build && electron .",
     "test": "playwright test",
     "setup": "install-electron",
-    "format": "prettier --write src electron tests *.ts *.json index.html"
+    "format": "prettier --write src electron tests *.ts *.json index.html",
+    "bundle:python": "node scripts/bundle-python.mjs",
+    "package": "npm run build && electron-builder --publish never",
+    "test:runtime": "node --test tests/runtime.test.mjs",
+    "smoke:package": "node scripts/smoke-package.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -29,6 +33,7 @@
     "@types/react-dom": "19.2.7",
     "@types/three": "0.185.4",
     "electron": "44.2.0",
+    "electron-builder": "26.15.3",
     "prettier": "3.9.6",
     "typescript": "7.0.2",
     "vite": "8.2.2"
@@ -37,5 +42,6 @@
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
-  }
+  },
+  "author": "CadKit contributors"
 }

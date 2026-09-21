@@ -8,10 +8,23 @@ version = "0.2.0"
 readme = "README.md"
 description = "Inspectable CadQuery projects: model, validate, preview, render, and slice"
 requires-python = ">=3.11"
-dependencies = ["cadquery==2.8.0", "cq_warehouse @ git+https://github.com/gumyr/cq_warehouse.git@daa46507ecc429c0e2dce11d9d5ffd09b12a42af", "trimesh>=4.7,<6", "manifold3d>=3,<4"]
+dependencies = [
+    "cadquery==2.8.0",
+    "cq_warehouse @ git+https://github.com/gumyr/cq_warehouse.git@daa46507ecc429c0e2dce11d9d5ffd09b12a42af",
+    "trimesh>=4.7,<6",
+    "manifold3d>=3,<4",
+    # Newer versions dropped Intel Mac wheels. Keep the recommended Python
+    # interpreter installable in consumer projects as well as release builds.
+    "nlopt<2.10; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
+    "numba<0.63; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
+]
 
 [project.optional-dependencies]
 desktop = ["ocp-tessellate==3.5.0"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+docs = ["mkdocs-material>=9.7,<10"]
 
 [project.scripts]
 cadkit = "cadkit.cli:main"
@@ -20,3 +33,14 @@ cadkit-slice-build = "cadkit.slice_build:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv]
+# These native dependencies must use wheels on every release target.
+no-build-package = ["numba", "llvmlite"]
+# Release runtimes use Python 3.12; keep wheel-only packages compatible with
+# each desktop target, including Intel Macs.
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64' and python_version == '3.12'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64' and python_version == '3.12'",
+]

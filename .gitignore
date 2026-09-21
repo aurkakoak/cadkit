@@ -11,3 +11,8 @@ desktop/test-results/
 desktop/playwright-report/
 releases/
 trials/
+dist/
+site-build/
+desktop/bundle/
+desktop/release/
+docs/*.local.md

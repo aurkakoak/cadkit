@@ -1,9 +1,22 @@
-PYTHON ?= .venv/bin/python
-.PHONY: test example
+UV ?= uv
+.PHONY: setup test example build docs docs-build
+
+setup:
+	$(UV) sync --locked --extra desktop
 
 test:
-	$(PYTHON) -m pytest tests -q
+	$(UV) run --locked --extra desktop pytest tests -q
 
 example:
-	PYTHONPATH=examples $(PYTHON) -m cadkit.cli --project bracket:PROJECT build all
-	PYTHONPATH=examples $(PYTHON) -m cadkit.cli --project bracket:PROJECT check
+	PYTHONPATH=examples $(UV) run --locked cadkit --project bracket:PROJECT build all
+	PYTHONPATH=examples $(UV) run --locked cadkit --project bracket:PROJECT check
+
+build:
+	$(UV) build
+
+docs:
+	$(UV) run --locked --only-group docs python scripts/build_site.py --prepare-only
+	$(UV) run --locked --only-group docs mkdocs serve
+
+docs-build:
+	$(UV) run --locked --only-group docs python scripts/build_site.py

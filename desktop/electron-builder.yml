@@ -1,0 +1,40 @@
+appId: dev.cadkit.desktop
+productName: CadKit
+directories:
+  output: release
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+extraResources:
+  - from: bundle/python
+    to: python
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**/*"
+      - "!**/*.pyc"
+  - from: ../examples
+    to: examples
+    filter:
+      - "*.py"
+asar: true
+npmRebuild: false
+beforePack: scripts/check-bundle.cjs
+publish: null
+mac:
+  category: public.app-category.graphics-design
+  target:
+    - dmg
+    - zip
+  artifactName: CadKit-${version}-macos-${arch}.${ext}
+  hardenedRuntime: true
+win:
+  target:
+    - nsis
+  artifactName: CadKit-${version}-windows-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

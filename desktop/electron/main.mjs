@@ -8,37 +8,36 @@ import {
 } from "electron";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
 import { startBridge } from "./local-bridge.mjs";
 import { validateCommand } from "./control-schema.mjs";
 import { Slicer } from "./slicer.mjs";
+import { argument, resolveRuntime } from "./runtime.mjs";
 
 const desktop = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 const framework = path.resolve(desktop, "..");
-const argument = (name, fallback) => {
-  const index = process.argv.indexOf(name);
-  return index < 0 ? fallback : process.argv[index + 1];
-};
-const projectDir = path.resolve(argument("--project-dir", process.cwd()));
-const reference = argument("--project", "project:PROJECT");
-const defaultPython = path.join(
-  projectDir,
-  ".venv",
-  process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
-);
-const python = argument(
-  "--python",
-  existsSync(defaultPython) ? defaultPython : "python3",
-);
 // Tests use their own profile; the normal app retains its theme preference.
 if (process.env.CADKIT_USER_DATA)
   app.setPath("userData", process.env.CADKIT_USER_DATA);
+const {
+  projectDir,
+  reference,
+  python,
+  workerEnv: pythonEnv,
+} = resolveRuntime({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  userData: app.getPath("userData"),
+  framework,
+});
+const smokeTest = process.argv.includes("--smoke-test");
+const smokeOutput = argument(process.argv, "--smoke-output");
 let window, current, candidate, snapshot, building;
 let queued = false;
 let status = { phase: "idle", message: "Ready to build" };
@@ -47,12 +46,7 @@ let bridge, slicer;
 let mechanicalReport = null;
 const rendererRequests = new Map();
 let rendererSequence = 0;
-const workerEnv = () => ({
-  ...process.env,
-  PYTHONPATH: [path.join(framework, "src"), projectDir, process.env.PYTHONPATH]
-    .filter(Boolean)
-    .join(path.delimiter),
-});
+const workerEnv = () => ({ ...pythonEnv });
 
 function control(method, params = {}) {
   if (!window || window.isDestroyed())
@@ -400,9 +394,11 @@ ipcMain.handle("cadkit:mcp-config", () => {
   const config = {
     mcpServers: {
       cadkit: {
-        command: process.env.npm_node_execpath ?? "node",
+        command: app.isPackaged
+          ? process.execPath
+          : (process.env.npm_node_execpath ?? "node"),
         args: [
-          path.join(desktop, "electron/mcp.mjs"),
+          app.isPackaged ? "--mcp" : path.join(desktop, "electron/mcp.mjs"),
           "--project-dir",
           projectDir,
           "--project",
@@ -494,6 +490,7 @@ app
     });
     bridge = await startBridge(projectDir, reference, dispatch);
     window = new BrowserWindow({
+      show: !smokeTest,
       width: 1500,
       height: 980,
       minWidth: 1050,
@@ -518,14 +515,41 @@ app
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     window.webContents.on("will-navigate", (event) => event.preventDefault());
     await window.loadFile(path.join(desktop, "dist/index.html"));
-    watcher = chokidar.watch([projectDir, path.join(framework, "src")], {
-      ignored: (file, stats) =>
-        /(?:^|[/\\])(?:\.git|\.venv|node_modules|__pycache__|build|dist|vendor|archive)(?:[/\\]|$)/.test(
-          file,
-        ) || Boolean(stats?.isFile() && !file.endsWith(".py")),
-      ignoreInitial: true,
-      awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
-    });
+    if (smokeTest) {
+      const scene = snapshot ?? (await (building ?? rebuild()));
+      const deadline = Date.now() + 60000;
+      let ui;
+      do {
+        ui = await control("get_state");
+        if (ui.revision === scene.revision) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } while (Date.now() < deadline);
+      if (ui.revision !== scene.revision)
+        throw new Error("Packaged renderer did not load the CAD scene");
+      const report = {
+        packaged: app.isPackaged,
+        projectDir,
+        python,
+        components: scene.components.length,
+        workerRevision: scene.revision,
+        rendererRevision: ui.revision,
+      };
+      if (!smokeOutput) throw new Error("--smoke-test requires --smoke-output");
+      writeFileSync(smokeOutput, JSON.stringify(report));
+      app.quit();
+      return;
+    }
+    watcher = chokidar.watch(
+      app.isPackaged ? [projectDir] : [projectDir, path.join(framework, "src")],
+      {
+        ignored: (file, stats) =>
+          /(?:^|[/\\])(?:\.git|\.venv|node_modules|__pycache__|build|dist|vendor|archive)(?:[/\\]|$)/.test(
+            file,
+          ) || Boolean(stats?.isFile() && !file.endsWith(".py")),
+        ignoreInitial: true,
+        awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+      },
+    );
     watcher.on("all", (_event, file) => {
       if (!file.endsWith(".py")) return;
       clearTimeout(debounce);
@@ -535,6 +559,14 @@ app
     });
   })
   .catch((error) => {
+    if (smokeTest) {
+      if (smokeOutput)
+        writeFileSync(smokeOutput, JSON.stringify({ error: error.message }));
+      current?.close();
+      candidate?.close();
+      app.exit(1);
+      return;
+    }
     dialog.showErrorBox("CadKit could not start", error.message);
     app.quit();
   });

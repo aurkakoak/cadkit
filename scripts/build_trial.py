@@ -14,9 +14,6 @@ import tempfile
 import tomllib
 
 
-DOCS = ("install.md", "api.md", "migration.md", "workflows.md", "mechanics.md", "interaction.md", "agent-guide.md", "contracts.md", "trials.md")
-
-
 def main():
     source = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -48,24 +45,23 @@ def main():
         shutil.copytree(source / "src" / "cadkit", package / "src" / "cadkit",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         (root / "python").mkdir()
-        subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps",
-                        "--wheel-dir", str(root / "python"), str(package)], check=True)
+        subprocess.run(["uv", "build", "--wheel", "--python", sys.executable,
+                        "--out-dir", str(root / "python"), str(package)], check=True)
         wheel, = (root / "python").glob("*.whl")
         shutil.copytree(source / "examples", root / "examples",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(source / "tests", root / "tests",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(source / "desktop", root / "desktop", ignore=shutil.ignore_patterns(
-            "node_modules", "dist", "test-results", "playwright-report", ".DS_Store"))
+            "node_modules", "dist", "bundle", "release", "test-results", "playwright-report", ".DS_Store"))
         shutil.copytree(source / "skill", root / "skills" / "cadkit")
         docs = root / "docs"
         docs.mkdir()
-        refs = root / "skills" / "cadkit" / "references"
-        refs.mkdir()
-        for name in DOCS:
-            shutil.copy2(source / "docs" / name, docs / name)
-            shutil.copy2(source / "docs" / name, refs / name)
-        (refs / "desktop.md").write_text((source / "desktop" / "README.md").read_text().replace("(../docs/", "("))
+        for document in sorted((source / "docs").glob("*.md")):
+            if not document.name.endswith(".local.md"):
+                shutil.copy2(document, docs / document.name)
+        if (source / "docs" / "assets").exists():
+            shutil.copytree(source / "docs" / "assets", docs / "assets")
         shutil.copy2(source / "scripts" / "install_trial.py", root / "install.py")
         (root / "START-HERE.md").write_text(
             f"# {release_id}\n\n"

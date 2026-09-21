@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: mac
+            arch: arm64
+            executable: release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+            executable: release/mac/CadKit.app/Contents/MacOS/CadKit
+          - os: windows-2025
+            platform: win
+            arch: x64
+            executable: release/win-unpacked/CadKit.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.9'
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: uv sync --locked --extra desktop
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: uv run --locked python scripts/release_metadata.py --tag "$RELEASE_TAG"
+      - run: uv run --locked pytest tests -q
+      - name: Verify Windows installer behavior
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/install-windows.ps1
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run test:runtime
+        working-directory: desktop
+      - run: npm run bundle:python
+        working-directory: desktop
+      - name: Build installers
+        working-directory: desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run package -- --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+      - name: Launch the packaged app with its bundled worker
+        working-directory: desktop
+        run: npm run smoke:package -- "${{ matrix.executable }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          compression-level: 0
+          if-no-files-found: error
+          path: |
+            desktop/release/CadKit-*.dmg
+            desktop/release/CadKit-*.zip
+            desktop/release/CadKit-*.exe
+
+  python-and-skill:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.9'
+      - run: uv build
+      - run: uv run --no-project python scripts/sync_skill.py --check
+      - run: uv run --no-project python scripts/release_metadata.py --skill dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-and-skill
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [package, python-and-skill]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-and-skill
+          path: dist
+      - name: Validate complete asset set and compute checksums
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/release_metadata.py --tag "$RELEASE_TAG" --checksums dist
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft --generate-notes
+          gh release upload "$RELEASE_TAG" dist/*
+          gh release edit "$RELEASE_TAG" --draft=false --latest

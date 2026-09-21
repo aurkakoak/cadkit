@@ -1,0 +1,76 @@
+site_name: CadKit
+site_description: Build, inspect and make real objects with Python and your agent.
+site_url: https://aurkakoak.github.io/cadkit/docs/
+repo_url: https://github.com/aurkakoak/cadkit
+repo_name: aurkakoak/cadkit
+docs_dir: build/docs-source
+site_dir: build/site/docs
+use_directory_urls: true
+theme:
+  name: material
+  logo: assets/mark.svg
+  favicon: assets/mark.svg
+  font: false
+  palette:
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+extra_css:
+  - assets/docs.css
+extra:
+  homepage: https://aurkakoak.github.io/cadkit/
+nav:
+  - Start here: index.md
+  - Getting started:
+      - Installation: install.md
+      - Working with your agent: interaction.md
+      - Modelling loop: agent-guide.md
+      - Adopt an existing project: migration.md
+  - Guides:
+      - Desktop and MCP: desktop.md
+      - Export, render and slice: workflows.md
+      - Mechanical connections: mechanics.md
+  - Reference:
+      - Python API: api.md
+      - Files and contracts: contracts.md
+  - Declarative authoring:
+      - Overview: declarative.md
+      - Manufacturing features: manufacturing-features.md
+      - Assemblies: declarative-assemblies.md
+      - Design proposal: declarative-api-proposal.md
+  - Contributing:
+      - Releases and publishing: releases.md
+      - Trial bundles: trials.md
+validation:
+  nav:
+    not_found: warn
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn

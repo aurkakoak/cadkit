@@ -1,0 +1,71 @@
+@charset "UTF-8";
+:root { color-scheme: light; --paper: #f6f5ee; --ink: #253d30; --muted: #657368; --line: #dcded1; --green: #254c3b; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Inter", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+a:hover { color: #3e7b52; }
+button { font: inherit; cursor: pointer; }
+button, a { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid #629d75; outline-offset: 5px; }
+.page { max-width: 1380px; padding: 0 64px; margin: 0 auto; }
+header { height: 112px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 11px; font-size: 24px; letter-spacing: -.9px; font-weight: 650; }
+nav { display: flex; gap: 34px; font-size: 14px; }
+nav span { margin-left: 4px; }
+.hero { display: grid; grid-template-columns: 1.18fr 1fr; align-items: center; gap: 56px; padding: 92px 0 81px; }
+.eyebrow, .install-label, .feature-number, .model-heading, figcaption, .skill-caption { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.eyebrow { font-size: 10px; letter-spacing: 1.55px; font-weight: 600; margin: 0 0 24px; display: flex; align-items: center; gap: 9px; }
+.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #579168; flex-shrink: 0; }
+h1 { font-size: clamp(43px, 4.65vw, 66px); letter-spacing: -3.8px; line-height: 1.055; font-weight: 540; margin: 0 0 25px; }
+h1 span { color: #779080; }
+.intro { color: var(--muted); font-size: 16px; line-height: 1.65; margin: 0 0 34px; max-width: 490px; }
+.install-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 11px; gap: 12px; }
+.install-label { font-size: 9px; letter-spacing: 1.25px; font-weight: 600; color: #718073; }
+.platforms { display: flex; align-items: center; gap: 5px; }
+.platforms button { border: 0; background: none; color: #68786b; font-size: 11px; padding: 5px 8px; border-radius: 4px; }
+.platforms button[aria-pressed="true"] { background: #e3e8dc; color: #244732; }
+.command { background: #e9ecdf; border: 1px solid #dce1d1; border-radius: 5px; min-height: 55px; display: flex; gap: 10px; align-items: center; padding: 10px 10px 10px 15px; color: #304d37; }
+.command code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; min-width: 0; }
+.prompt { color: #8b9f88; font-size: 13px; flex-shrink: 0; }
+.copy { border: none; padding: 6px; color: #70836a; background: transparent; border-radius: 3px; margin-left: auto; display: flex; flex-shrink: 0; }
+.copy:hover { background: #d8e0cb; color: #294b35; }
+.copy svg { width: 16px; height: 16px; }
+.copy.copied { color: #1d7544; }
+.install-note { display: flex; flex-wrap: wrap; justify-content: space-between; font-size: 10px; line-height: 1.6; color: #808c7e; gap: 3px 12px; margin: 10px 0 0; }
+.install-note a { color: #60765e; }
+.guide-link { display: inline-flex; gap: 17px; margin-top: 27px; font-size: 13px; font-weight: 550; }
+.model { margin: 7px 0 0; border: 1px solid #d5dccd; background: #eff1e5; border-radius: 8px; overflow: hidden; }
+.app-screenshot { display: block; width: 100%; height: auto; }
+.model-heading { display: flex; justify-content: space-between; padding: 18px 20px 15px; font-size: 9px; letter-spacing: 1px; color: #6c7b66; border-bottom: 1px solid #dce2d2; }
+.model-type { font-size: 8px; letter-spacing: .5px; color: #87917d; }
+.model-drawing { display: block; width: 100%; height: auto; }
+figcaption { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-top: 1px solid #dce2d2; color: #71826a; font-size: 8px; }
+figcaption > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+figcaption .status-dot { width: 4px; height: 4px; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 33px 0 36px; }
+.features article { padding: 0 35px; border-left: 1px solid var(--line); }
+.features article:first-child { padding-left: 0; border: none; }
+.features article:last-child { padding-right: 0; }
+.feature-number { color: #8b9687; font-size: 9px; letter-spacing: 1.1px; }
+.features h2 { font-size: 15px; font-weight: 550; letter-spacing: -.25px; margin: 0 0 10px; }
+.features p { color: #74806f; font-size: 12px; line-height: 1.75; max-width: 305px; margin: 0; }
+.agent { display: grid; grid-template-columns: 1.1fr 1fr; gap: 65px; align-items: center; padding: 67px 0 72px; }
+.agent .eyebrow { color: #7b8974; font-size: 9px; margin-bottom: 17px; }
+.agent h2 { font-size: 25px; line-height: 1.25; letter-spacing: -.85px; font-weight: 500; margin: 0 0 14px; }
+.agent p:not(.eyebrow) { font-size: 13px; line-height: 1.7; color: #74806f; margin: 0 0 19px; }
+.agent a { font-size: 12px; }
+.agent a span { margin-left: 12px; }
+.skill-install .install-label { display: block; margin-bottom: 12px; }
+.skill-install .command { background: transparent; }
+.skill-install .command code { font-size: 11px; }
+.skill-caption { display: block; font-size: 8px; color: #8a9381; margin-top: 12px; }
+footer { display: flex; align-items: center; gap: 24px; padding: 27px 0 32px; border-top: 1px solid var(--line); color: #8a9381; font-size: 10px; }
+footer .brand { color: #53694f; font-size: 17px; letter-spacing: -.5px; gap: 8px; }
+footer > a:last-child { margin-left: auto; color: #657b5f; }
+.skip { position: absolute; top: -100px; left: 20px; background: var(--green); color: white; padding: 12px; z-index: 5; }
+.skip:focus { top: 20px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (min-width: 1300px) { .command code { font-size: 11px; } }
+@media (max-width: 1050px) { .page { padding: 0 36px; } .hero { gap: 32px; padding: 65px 0; } h1 { font-size: 47px; letter-spacing: -2.7px; } .intro { font-size: 14px; } .wide-only { display: none; } .features article { padding: 0 22px; } .agent { gap: 40px; } .model-heading { font-size: 8px; padding: 15px; } figcaption { font-size: 7px; padding: 12px; } }
+@media (max-width: 760px) { .page { padding: 0 25px; } header { height: 86px; } nav { gap: 20px; font-size: 12px; } .brand { font-size: 22px; } .brand img { width: 28px; height: 28px; } .hero { grid-template-columns: 1fr; gap: 47px; padding: 53px 0 43px; } h1 { font-size: clamp(43px, 8.8vw, 65px); letter-spacing: -2.7px; } .hero-copy { max-width: 580px; } .intro { font-size: 15px; max-width: 420px; } .installer { max-width: 580px; } .command code { font-size: 11px; } .model { width: 88%; max-width: 440px; justify-self: center; } .features { grid-template-columns: 1fr; padding: 9px 0; } .features article, .features article:first-child, .features article:last-child { padding: 23px 0; border: none; } .features article + article { border-top: 1px solid var(--line); } .features h2 { font-size: 17px; margin-top: 12px; } .features p { font-size: 13px; max-width: 440px; } .agent { grid-template-columns: 1fr; gap: 31px; padding: 45px 0; } .agent h2 { font-size: 26px; max-width: 370px; } .skill-install { max-width: 580px; } footer { flex-wrap: wrap; gap: 16px; } footer > span { order: 3; flex-basis: 100%; } }
+@media (max-width: 390px) { .page { padding: 0 20px; } nav { gap: 14px; font-size: 11px; } .command code { font-size: 9px; } .skill-install .command code { font-size: 10px; } .model { width: 98%; } h1 { font-size: 42px; } }

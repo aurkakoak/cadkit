@@ -9,7 +9,7 @@ switch updates the viewport too and remembers the choice.
 
 The release pipeline builds macOS Apple Silicon and Intel DMG/ZIP downloads,
 and a Windows x64 installer, with Python and CAD dependencies included.
-See [installation](../docs/install.md) and [release builds](../docs/releases.md).
+See [installation](install.md) and [release builds](releases.md).
 Opening the installed app creates an editable bracket project in the app's
 user-data directory. Existing edits survive later launches and upgrades.
 
@@ -97,7 +97,7 @@ Hardware has All/Selected/Hidden visibility and a reversible assembly preview.
 Measurements use installed geometry; return the preview to zero before measuring.
 Run assembly checks here or review the selected Part set before printing.
 Known failures require an explicit override reason, stored with exported artifacts.
-Unverified coverage remains visible. See [mechanical contracts](../docs/mechanics.md)
+Unverified coverage remains visible. See [mechanical contracts](mechanics.md)
 for modelling, validation limits, and the four dedicated MCP tools.
 
 ## MCP: connect an external agent
