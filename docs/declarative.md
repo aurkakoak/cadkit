@@ -65,10 +65,6 @@ D-bores, seals, bosses, tapping, insert installation and layered mounts. See
 revolute/slider joints, gear/rack coupling, named poses, purchased inventory,
 bounded interfaces, driver access and existing-project embedding.
 
-The [historical API proposal](declarative-api-proposal.md) records the original
-design rationale and a broader proposed interface. Use these current guides
-and the runnable example above for authoring syntax.
-
 Placement is directed and deterministic; it is not a general constraint solver.
 The framework does not infer material, select an unrequested screw length,
 execute secondary operations or certify a physical fit. Purchased envelopes and
