@@ -1,9 +1,9 @@
-# Experimental declarative authoring
+# Declarative authoring
 
-`from cadkit import design as d` opts into the native authoring layer described by the
-[design proposal](declarative-api-proposal.md). Existing `cadkit.Part`,
-`cadkit.Assembly`, Project loaders, viewers and exporters keep their existing API.
-This namespace is experimental; it is not yet the whole proposed interface.
+`from cadkit import design as d` imports CadKit's implemented native authoring
+layer. Existing `cadkit.Part`, `cadkit.Assembly`, Project loaders, viewers and
+exporters keep their existing API. The `cadkit.design` namespace is experimental;
+these guides document its current interface.
 
 CadQuery owns native geometry. A `d.Part` owns its lazy CadQuery body builder and
 an ordered dictionary of named manufacturing features. Shared `InsertMount` and
@@ -49,8 +49,8 @@ the authored feature metadata; final geometry still needs the project's checks.
 The resulting legacy Part's `describe()` includes a `design` object containing
 named features, frames, manufacturing information and secondary operations
 with feature provenance. Design assembly components expose the same object as metadata to the
-existing desktop worker and agent tools. There is no new feature-specific editor
-or face-selection UI in this slice.
+existing desktop worker and agent tools. Feature-specific editing and face
+selection are not currently available in the desktop UI.
 
 `InsertMount` reuses `cadkit.FastenerSpec` for supplier identity and catalogue
 geometry. It derives grip, hardware offsets and bottom depth from the part role,
@@ -64,6 +64,10 @@ D-bores, seals, bosses, tapping, insert installation and layered mounts. See
 [Declarative assemblies](declarative-assemblies.md) for ports, nested assemblies,
 revolute/slider joints, gear/rack coupling, named poses, purchased inventory,
 bounded interfaces, driver access and existing-project embedding.
+
+The [historical API proposal](declarative-api-proposal.md) records the original
+design rationale and a broader proposed interface. Use these current guides
+and the runnable example above for authoring syntax.
 
 Placement is directed and deterministic; it is not a general constraint solver.
 The framework does not infer material, select an unrequested screw length,

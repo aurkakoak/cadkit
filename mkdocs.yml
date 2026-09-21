@@ -63,10 +63,10 @@ nav:
       - Overview: declarative.md
       - Manufacturing features: manufacturing-features.md
       - Assemblies: declarative-assemblies.md
-      - Design proposal: declarative-api-proposal.md
   - Contributing:
       - Releases and publishing: releases.md
       - Trial bundles: trials.md
+      - Historical API proposal: declarative-api-proposal.md
 validation:
   nav:
     not_found: warn

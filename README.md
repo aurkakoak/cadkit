@@ -5,23 +5,23 @@
 ```python
 # project.py
 import cadquery as cq
-from cadkit import Component, Part, Project
+from cadkit import design as d
 
-
-def plate():
-    return (
-        cq.Workplane("XY")
-        .box(60, 24, 6)
-        .faces(">Z").workplane()
-        .pushPoints([(-20, 0), (20, 0)]).hole(4.3)
-    )
-
-
-PROJECT = Project(
+plate = d.Part(
     "plate",
-    (Part("plate", plate, "structure"),),
-    lambda: [Component("plate", plate(), "printed", part="plate")],
+    body=lambda: cq.Workplane("XY").rect(60, 24).extrude(6),
+    manufacture=d.FDM("PETG"),
+    features={
+        "mounting-holes": d.Hole(
+            diameter=4.3, depth=6, through=True,
+            pattern=d.PointPattern(((-20, 0), (20, 0))),
+        ),
+    },
 )
+
+assembly = d.Assembly("bracket")
+assembly.fix(assembly.add("plate", plate))
+PROJECT = assembly.as_project()
 ```
 
 ## Install

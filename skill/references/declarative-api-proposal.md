@@ -1,13 +1,31 @@
-# Declarative Cadkit: programming interface proposal
+# Declarative API proposal (historical)
 
-Discussion draft, 12 September 2026. All code labeled **proposed** is API design,
-not an implemented or executable Cadkit API. Existing builders and dimensions
-referenced by those examples are inputs; the examples are not drop-in migrations.
-This proposal changes no runtime behavior.
+This page preserves the discussion draft from 12 September 2026. For the
+implemented API and current usage, start with [declarative authoring](declarative.md).
+Code labeled **proposed** below records the original API design; its names and
+signatures are design sketches. Existing consumer builders and dimensions in
+those examples are inputs, so the snippets are not drop-in migrations.
 
-The first implementation is documented in [declarative authoring](declarative.md).
-It uses the separate `cadkit.design` namespace and implements the rigid retainer
-connection slice. The broader examples in this proposal remain design sketches.
+## Current implementation
+
+The `cadkit.design` namespace implements manufacturing features, assembly
+composition and motion, and generated mechanical contracts. The original rigid
+retainer example has grown into the following capabilities:
+
+| Implemented capabilities | Current guide |
+| --- | --- |
+| Immutable part definitions, CadQuery bodies, feature ownership, manufacturing metadata and existing Project adapters | [Declarative authoring](declarative.md) |
+| Holes, counterbores, countersinks, tapped holes, bearing seats, slots, D-bores, nut pockets, seal grooves, bosses, FDM and sheet-stock metadata | [Manufacturing features](manufacturing-features.md) |
+| Insert and threaded mounts, layered stacks, bounded fit contracts, captive-nut fastenings and set screws | [Manufacturing features](manufacturing-features.md#shared-connections) |
+| Named ports, repeated and nested assemblies, rigid/revolute/slider placement, affine motion coupling, named poses, purchased inventory, contact regions, tool access and existing-project embedding | [Declarative assemblies](declarative-assemblies.md) |
+
+[`examples/insert_mount.py`](examples/insert_mount.py) is a complete runnable
+example using the implemented API. The namespace remains experimental; the
+proposal below is broader than the current interface. Placement uses a directed
+graph, and feature-specific desktop editing and a general constraint solver
+remain outside the current implementation.
+
+## Original design boundary
 
 The intended boundary is: **CadQuery describes shape. Cadkit describes a physical
 design: what each part requires to be made, and how its instances connect.** The
@@ -409,9 +427,10 @@ thread engagement can additionally depend on catalogue facts. A known schema
 does not establish material strength, printer calibration or a feasible complete
 assembly sequence.
 
-## First implementation slice and design decisions
+## Original implementation plan and design decisions
 
-Use Brewer's bearing-retainer connection as the first end-to-end example:
+The draft proposed Brewer's bearing-retainer connection as the first end-to-end
+example. This list records that original implementation plan:
 
 1. Local part definitions, named features and ports; preserve exact authored
    geometry and current manufacturing orientation.
