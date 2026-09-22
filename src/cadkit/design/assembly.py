@@ -71,6 +71,39 @@ class Instance:
         return PortRef(self, key)
 
 
+    def component(self, key):
+        """Reference a selected leaf exported by this nested assembly instance.
+
+        Args:
+            key (str): Name declared with the nested assembly's `export_component`.
+
+        Returns:
+            (ComponentRef): Leaf reference scoped to this occurrence of the assembly.
+
+        Raises:
+            ValueError: This is a leaf instance or the component is not exported.
+        """
+        if not isinstance(self.part, Assembly) or key not in self.part._exported_components:
+            raise ValueError(f"{self.name}: unknown exported component {key!r}")
+        return ComponentRef(self, key)
+
+
+@dataclass(frozen=True)
+class ComponentRef:
+    """An exported leaf scoped to one installed subassembly occurrence.
+
+    Obtain this with `instance.component(name)`. Pass it to `Assembly.interface`
+    or re-export it with `Assembly.export_component`; it is not an attachment
+    datum. Reusing a subassembly creates distinct references for its instances.
+
+    Attributes:
+        instance (Instance): Nested assembly instance anchoring this reference.
+        key (str): Component export name on that instance's assembly definition.
+    """
+    instance: Instance
+    key: str
+
+
 @dataclass(frozen=True)
 class PortRef:
     instance: Instance
@@ -132,8 +165,8 @@ class Coupling:
 @dataclass(frozen=True)
 class Contact:
     name: str
-    left: Instance
-    right: Instance
+    left: Instance | ComponentRef
+    right: Instance | ComponentRef
     kind: str
     region: object = None
     max_overlap_mm3: float = 0
@@ -172,6 +205,7 @@ class Assembly:
         self._connections = {}
         self._attachments = {}
         self._ports = {}
+        self._exported_components = {}
         self._couplings = {}
         self._poses = {}
         self._interfaces = {}
@@ -193,13 +227,22 @@ class Assembly:
     def ports(self):
         return MappingProxyType(self._ports)
 
-    def add(self, name, part, *, group=None, color=None, material=None, explode=(0, 0, 0)):
+    @property
+    def exported_components(self):
+        """Read-only mapping of public component names to selected leaf references."""
+        return MappingProxyType(self._exported_components)
+
+    def add(self, name=None, part=None, *, group=None, color=None, material=None, explode=(0, 0, 0)):
         """Add a named instance without placing it or building its geometry.
 
         Args:
-            name (str): Unique instance name within this assembly.
-            part (Part | Purchased | Assembly): Reusable definition.
-            group (str | None): Manufacturing/display group override.
+            name (str | Part | Purchased | Assembly | None): Unique instance name,
+                or the definition itself when using `add(part)`.
+            part (Part | Purchased | Assembly | None): Reusable definition. An
+                omitted name defaults to its name; duplicate names are errors.
+            group (str | None): Display group override. Defaults to the Part's
+                manufacturing group or `Purchased`; never changes manufacturing
+                grouping. Nested assemblies retain their leaves' display groups.
             color (tuple | None): RGB display override, each channel from 0 to 1.
             material (str | None): Rendering material override.
             explode (tuple): Presentation translation in millimetres.
@@ -207,9 +250,14 @@ class Assembly:
         Returns:
             (Instance): Owned handle for fixing, connecting, and referencing features.
         """
-        valid_name(name)
+        if isinstance(name, (Part, Purchased, Assembly)):
+            if part is not None:
+                raise TypeError("Pass a definition alone or an instance name and definition")
+            part, name = name, None
         if not isinstance(part, (Part, Purchased, Assembly)):
             raise TypeError("Assembly instances need a Part, Purchased or Assembly definition")
+        name = part.name if name is None else name
+        valid_name(name)
         if part is self:
             raise ValueError("An assembly cannot contain itself")
         if name in self._instances:
@@ -218,6 +266,8 @@ class Assembly:
             raise ValueError(f"Different part definitions share {part.name!r}; name the variant explicitly")
         if color is not None and (len(color) != 3 or any(not math.isfinite(c) or not 0 <= c <= 1 for c in color)):
             raise ValueError("Component color must have three values between zero and one")
+        if group is None:
+            group = part.group if isinstance(part, Part) else "Purchased" if isinstance(part, Purchased) else None
         instance = Instance(name, part, group, self, tuple(color) if color is not None else None, material, tuple(explode))
         self._instances[name] = instance
         return instance
@@ -267,6 +317,42 @@ class Assembly:
         if name in self._ports:
             raise ValueError(f"Duplicate exported port {name!r}")
         self._ports[name] = ref
+
+    def _component_path(self, component):
+        """Validate a local participant and return its definition-relative leaf path."""
+        if isinstance(component, Instance):
+            self._owned(component)
+            if isinstance(component.part, Assembly):
+                raise ValueError("Contact components must identify leaf part instances; use an exported component")
+            return component.name
+        if not isinstance(component, ComponentRef):
+            raise TypeError("Use a leaf instance or instance.component(name) as a contact component")
+        instance = component.instance
+        self._owned(instance)
+        if not isinstance(instance.part, Assembly) or component.key not in instance.part._exported_components:
+            raise ValueError(f"{instance.name}: unknown exported component {component.key!r}")
+        target = instance.part._exported_components[component.key]
+        return _path(instance.name, instance.part._component_path(target))
+
+    def export_component(self, name, component):
+        """Expose a selected leaf for contact contracts in a containing assembly.
+
+        Args:
+            name (str): Unique public component name.
+            component (Instance | ComponentRef): Owned leaf instance, or a leaf
+                exported by an owned nested assembly instance.
+
+        A containing assembly accesses this leaf through its own installed
+        instance's `component(name)`. Re-exporting a nested component preserves
+        its scope. Several public names may refer to the same leaf. Whole
+        assemblies are rejected; export attachment datums separately with
+        `export_port`.
+        """
+        valid_name(name)
+        if name in self._exported_components:
+            raise ValueError(f"Duplicate exported component {name!r}")
+        self._component_path(component)
+        self._exported_components[name] = component
 
     def connect(self, name, relationship, *, parent=None, child=None, through=None, into=None,
                 fastening_name=None, place=True, via=(), description=""):
@@ -377,15 +463,17 @@ class Assembly:
 
     def interface(self, name, *, left, right, kind="contact", region=None,
                   max_overlap_mm3=0, min_clearance_mm=0, max_gap_mm=None, description=""):
-        """Declare contact or clearance between two local leaf instances.
+        """Declare contact or clearance between two selected leaf instances.
 
         Args:
             name (str): Unique interface name.
-            left (Instance): First Part or Purchased instance.
-            right (Instance): Second distinct Part or Purchased instance.
+            left (Instance | ComponentRef): Owned leaf instance or exported leaf
+                anchored to an owned nested assembly instance.
+            right (Instance | ComponentRef): Second distinct leaf reference.
             kind (str): `contact`, `clearance`, `press_fit`, `threaded`, or `mesh`.
             region (Callable | None): Native overlap-region builder in this assembly's
-                coordinates; it transforms with the containing assembly.
+                coordinates; it transforms with the declaring assembly, not
+                independently with either moving participant.
             max_overlap_mm3 (float): Permitted overlap within the bounded region.
             min_clearance_mm (float): Required minimum separation in millimetres.
             max_gap_mm (float | None): Maximum permitted gap; contact defaults to 0.001.
@@ -394,18 +482,18 @@ class Assembly:
         Returns:
             (Contact): Local declaration resolved into an Interface for validation.
 
-        Nested assembly handles are not leaf contact participants. Declare the
-        contact in the assembly owning the relevant leaves.
+        Whole nested assemblies are not contact participants. Select their
+        exported leaves with `instance.component(name)`; these references follow
+        every placement and pose of that particular nested occurrence.
         """
         valid_name(name)
-        for instance in (left, right):
-            self._owned(instance)
-            if isinstance(instance.part, Assembly):
-                raise ValueError("Contact interfaces must identify leaf part instances")
+        participants = (self._component_path(left), self._component_path(right))
+        if participants[0] == participants[1]:
+            raise ValueError("A contact interface needs two distinct leaf instances")
         if name in self._interfaces:
             raise ValueError("Duplicate interface name")
         # Validate the same bounded allowances as the public mechanics contract.
-        Interface(name, (left.name, right.name), kind, region, max_overlap_mm3, min_clearance_mm, max_gap_mm, description)
+        Interface(name, participants, kind, region, max_overlap_mm3, min_clearance_mm, max_gap_mm, description)
         contact = Contact(name, left, right, kind, region, max_overlap_mm3, min_clearance_mm, max_gap_mm, description)
         self._interfaces[name] = contact
         return contact
@@ -648,16 +736,22 @@ class Assembly:
                         raise ValueError(f"{_path(prefix, connection.name)}: fastening feature datums do not coincide")
         return result
 
-    def locations(self, *, at=Frame(), pose=None):
-        """Resolve immediate instance locations without building geometry.
+    def locations(self, *, at=Frame(), pose=None, names="immediate"):
+        """Resolve instance locations without building geometry.
 
         Args:
             at (Frame): Placement of this assembly in its caller's coordinates.
             pose (dict | str | None): Joint positions, named pose, or defaults.
+            names (str): `immediate` for this assembly's direct instances, or
+                `path` for every leaf keyed by its relative assembly path.
 
         Returns:
-            (dict[str, cq.Location]): Immediate instance names mapped to native locations.
+            (dict[str, cq.Location]): Instance names or leaf paths mapped to native locations.
         """
+        if names == "path":
+            return {path: location for path, (_, location) in self._resolve(at=at, pose=pose).leaves.items()}
+        if names != "immediate":
+            raise ValueError("locations expects names immediate/path")
         positions = self._positions(self._normalize_pose(pose))
         return {name: at.location * location for name, location in self._locations("", positions).items()}
 
@@ -840,13 +934,15 @@ class Assembly:
                 "fixed": {name: frame.describe() for name, frame in self._fixed.items()},
                 "ports": {name: {"instance": ref.instance.name, "port": ref.key,
                                   "feature": isinstance(ref, FeatureRef)} for name, ref in self._ports.items()},
+                "exported_components": {name: self._component_path(component)
+                                        for name, component in self._exported_components.items()},
                 "connections": {name: self._describe_connection(c) for name, c in self._connections.items()},
                 "attachments": {name: {"recipe":a.recipe.describe(),
                     "features":{key:{"instance":ref.instance.name,"feature":ref.key} for key,ref in a.features.items()}}
                     for name,a in self._attachments.items()},
                 "couplings": {name: {"driver": c.driver, "driven": c.driven, "ratio": c.ratio, "offset": c.offset}
                               for name, c in self._couplings.items()},
-                "interfaces": {name: {"left": c.left.name, "right": c.right.name, "kind": c.kind,
+                "interfaces": {name: {"left": self._component_path(c.left), "right": self._component_path(c.right), "kind": c.kind,
                                        "max_overlap_mm3": c.max_overlap_mm3, "min_clearance_mm": c.min_clearance_mm,
                                        "max_gap_mm": c.max_gap_mm, "has_region": c.region is not None,
                                        "description": c.description} for name, c in self._interfaces.items()},
@@ -876,8 +972,11 @@ class Assembly:
             frozen._instances[name] = replacements[id(instance)]
         def ref(value):
             return replace(value, instance=replacements[id(value.instance)])
+        def component(value):
+            return ref(value) if isinstance(value, ComponentRef) else replacements[id(value)]
         frozen._fixed = dict(self._fixed)
         frozen._ports = {key: ref(value) for key, value in self._ports.items()}
+        frozen._exported_components = {key: component(value) for key, value in self._exported_components.items()}
         for name, connection in self._connections.items():
             if isinstance(connection, Connection):
                 frozen._connections[name] = replace(connection, through=ref(connection.through), into=ref(connection.into),
@@ -888,7 +987,7 @@ class Assembly:
                                for name,a in self._attachments.items()}
         frozen._couplings = dict(self._couplings)
         frozen._poses = {name: dict(values) for name, values in self._poses.items()}
-        frozen._interfaces = {name: replace(c, left=replacements[id(c.left)], right=replacements[id(c.right)])
+        frozen._interfaces = {name: replace(c, left=component(c.left), right=component(c.right))
                               for name, c in self._interfaces.items()}
         frozen._access = {name: replace(value, obstacles=tuple(replacements[id(i)] for i in value.obstacles))
                           for name, value in self._access.items()}
@@ -1056,7 +1155,9 @@ class Resolution:
         for prefix, (assembly, world, _) in self.assemblies.items():
             for name, contact in assembly._interfaces.items():
                 region = (lambda builder=contact.region, location=world: native(builder()).moved(location)) if contact.region else None
-                result.append(Interface(_path(prefix, name), (self._id(_path(prefix, contact.left.name)), self._id(_path(prefix, contact.right.name))),
+                participants = tuple(self._id(_path(prefix, assembly._component_path(component)))
+                                     for component in (contact.left, contact.right))
+                result.append(Interface(_path(prefix, name), participants,
                                         contact.kind, region, contact.max_overlap_mm3, contact.min_clearance_mm,
                                         contact.max_gap_mm, contact.description))
             for connection in assembly._connections.values():

@@ -1,6 +1,6 @@
 """Tools for building, inspecting, and fabricating CadQuery projects."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 from .design import *
 from .design import __all__ as _design_exports
 from .design.assembly import Project

@@ -6,6 +6,12 @@ ports. `Purchased` supplies the same geometry/port contract with supplier metada
 and a quantity; it is excluded from printable parts. An `Assembly` owns instances
 of either definition, or instances of other assemblies.
 
+`assembly.add(definition)` uses the definition's name. Supply an explicit alias
+for a repeated occurrence, such as `add("left", unit)`. An omitted display group
+inherits a manufactured Part's group; an explicit instance group changes display
+only. Nested leaves retain their groups when the containing instance has no
+override.
+
 ## Placement and motion
 
 Every instance has one placement parent or an explicit fixed frame. Each
@@ -87,9 +93,37 @@ head.access("retainer-driver", connection=retainer_connection,
 `driver_access(name, connection=..., diameter=..., length=..., obstacles=...)`
 derives straight outward tool probes from the shared pattern and screw seats.
 
-Contact and clearance interfaces are local assembly declarations. Optional bounded
-regions move with their containing assembly. They constrain checks; they do not
-alter geometry.
+## Contacts across subsystems
+
+An assembly can publish selected Part or Purchased leaves as contact participants:
+
+```python
+unit.export_component("foot", foot_instance)
+left = machine.add("left", unit)
+right = machine.add("right", unit)
+machine.interface("feet-clearance", left=left.component("foot"),
+                  right=right.component("foot"), kind="clearance",
+                  min_clearance_mm=required_gap)
+```
+
+Ground or connect both unit instances before building geometry. Each
+`component()` call returns a `ComponentRef` bound to its installed occurrence;
+obtain it from the instance rather than constructing the reference manually.
+An interface can mix those references with direct leaf instances owned by the
+declaring assembly. A nested Assembly itself is not a leaf participant.
+
+`export_component` also accepts a component reference from an owned nested
+instance, so a subsystem can re-export a selected descendant. Export names must
+be unique; different names may alias the same leaf. An interface cannot name
+that same resolved leaf as both participants.
+`exported_components` exposes the assembly's read-only export map.
+
+The geometry follows nested placements, selected poses and reused instances.
+Ports identify placement datums; component exports identify the leaf geometry
+to check. Optional bounded interface regions remain in the declaring assembly's
+frame, rather than following either participant independently. Declarations
+constrain checks and do not alter geometry; mesh and envelope evidence retains
+its usual limitations.
 
 ## One graph for the desktop and exports
 
@@ -99,6 +133,8 @@ joints, contact regions and access envelopes resolve from the same selected pose
 Later edits to the source graph cannot alter an existing snapshot.
 
 - `components()` returns installed components with unique relative paths.
+- `locations()` returns immediate-instance transforms; `locations(names="path")`
+  returns scoped leaf transforms without building their geometry.
 - `models(kind="manufactured", names="leaf")` supplies CadQuery Workplanes for
   existing native callers; duplicate leaf names require `names="path"`.
 - `as_assembly()` preserves the authored hierarchy for Cadkit inspection.
@@ -110,10 +146,12 @@ Later edits to the source graph cannot alter an existing snapshot.
 
 Compose a subsystem by adding its Assembly definition to the parent. Publish
 attachment datums with `export_port`, and use the returned instance's `port()`
-for outer connections. Compile the containing graph with `as_project()` so
+for outer connections. Use `export_component` and `component()` for contacts
+between subsystems. Compile the containing graph with `as_project()` so
 hardware and mechanical paths have the correct root and nested identity.
 
 The compiled manufacturing inventory counts installed Parts independently of
 poses and visibility. `extra_parts=(COUPON,)` adds uninstalled definitions;
 `quantities={"bracket": 6}` selects an explicit manufacturing total. Definition
-groups control manufacturing folders; instance groups control display.
+groups control manufacturing folders; instance groups control display and
+inherit manufactured Part groups when omitted.

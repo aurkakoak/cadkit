@@ -37,6 +37,15 @@ HP_PARTS = {
     "hp-turbine",
 }
 COVERS = {"nacelle-front-cover", "nacelle-rear-cover", "exhaust-upper-cover"}
+SUBSYSTEMS = {"stand", "housing", "core", "low-pressure", "high-pressure"}
+
+
+def leaves_by_path(assembly):
+    return {
+        f"{unit_name}/{name}": instance
+        for unit_name, unit in assembly.instances.items()
+        for name, instance in unit.part.instances.items()
+    }
 
 
 def positioned_point(location):
@@ -62,10 +71,18 @@ def test_each_spool_moves_every_follower_and_leaves_other_parts_fixed(
     from turbofan.dimensions import EngineDimensions
 
     assembly = make_assembly()
-    home = assembly.locations()
-    posed = assembly.locations(pose=pose)
-    assert LP_PARTS | HP_PARTS <= home.keys()
-    for name, location in home.items():
+    home = assembly.locations(names="path")
+    posed = assembly.locations(pose=pose, names="path")
+    leaves = leaves_by_path(assembly)
+    assert home.keys() == posed.keys() == leaves.keys()
+    assert {
+        leaves[path].part.name for path in home if path.startswith("low-pressure/")
+    } == LP_PARTS
+    assert {
+        leaves[path].part.name for path in home if path.startswith("high-pressure/")
+    } == HP_PARTS
+    for path, location in home.items():
+        name = leaves[path].part.name
         x, y, z = positioned_point(location)
         angle = lp_angle if name in LP_PARTS else hp_angle if name in HP_PARTS else 0
         theta = radians(angle)
@@ -75,7 +92,7 @@ def test_each_spool_moves_every_follower_and_leaves_other_parts_fixed(
             y * cos(theta) - (z - height) * sin(theta),
             height + y * sin(theta) + (z - height) * cos(theta),
         )
-        assert positioned_point(posed[name]) == pytest.approx(expected), name
+        assert positioned_point(posed[path]) == pytest.approx(expected), path
 
 
 def test_open_view_removes_covers_without_losing_optional_manufacturing_parts(turbofan):
@@ -88,11 +105,17 @@ def test_open_view_removes_covers_without_losing_optional_manufacturing_parts(tu
         assert all(part.quantity == 1 for part in project.parts)
         assert {part.name for part in project.parts if not part.production} == COVERS
         assert {part.name for part in project.select(tuple(sorted(COVERS)))} == COVERS
-    assert set(make_assembly().instances) - set(make_assembly(covers=False).instances) == COVERS
     assembly = make_assembly()
-    for name, instance in assembly.instances.items():
-        assert instance.group == instance.part.group, name
-    assert {item.group for item in assembly.instances.values()} == {
+    opened_assembly = make_assembly(covers=False)
+    assert set(assembly.instances) == set(opened_assembly.instances) == SUBSYSTEMS
+    assert set(assembly.locations()) == SUBSYSTEMS
+    closed_leaves, open_leaves = leaves_by_path(assembly), leaves_by_path(opened_assembly)
+    assert len(closed_leaves) == 39
+    assert len(open_leaves) == 36
+    assert set(closed_leaves) - set(open_leaves) == {f"housing/{name}" for name in COVERS}
+    for path, instance in closed_leaves.items():
+        assert instance.group == instance.part.group, path
+    assert {item.group for item in closed_leaves.values()} == {
         "Display",
         "Casing",
         "Covers",
@@ -101,6 +124,34 @@ def test_open_view_removes_covers_without_losing_optional_manufacturing_parts(tu
         "LP spool",
         "HP spool",
     }
+
+
+def test_contacts_resolve_to_scoped_leaves_across_and_within_subsystems(turbofan):
+    from turbofan.assembly import make_assembly
+
+    for project, covers, expected_count in (
+        (turbofan.PROJECT, True, 18),
+        (turbofan.OPEN_PROJECT, False, 15),
+    ):
+        paths = {
+            f"/{project.name}/{path}"
+            for path in leaves_by_path(make_assembly(covers=covers))
+        }
+        assert len(project.interfaces) == expected_count
+        assert all(set(interface.components) <= paths for interface in project.interfaces)
+        contact_pairs = {
+            frozenset(interface.components)
+            for interface in project.interfaces
+            if interface.kind == "contact"
+        }
+        for left, right in (
+            ("stand/front-saddle", "housing/nacelle-front-lower"),
+            ("core/front-bypass-support", "housing/nacelle-front-lower"),
+            ("stand/display-base", "stand/front-saddle"),
+            ("core/front-bypass-support", "core/core-cutaway"),
+        ):
+            pair = frozenset((f"/{project.name}/{left}", f"/{project.name}/{right}"))
+            assert pair in contact_pairs
 
 
 @pytest.mark.parametrize("diameter,flat,clearance", [(8.8, 3.6, 0.25), (9.2, 3.8, 0.35)])
@@ -139,22 +190,24 @@ def test_axis_height_edit_moves_engine_and_recuts_the_stand_seat(turbofan):
     default = make_assembly()
     engine = replace(EngineDimensions(), axis_height=120)
     raised = make_assembly(engine=engine)
-    default_locations, raised_locations = default.locations(), raised.locations()
-    for name in raised.instances:
-        before = positioned_point(default_locations[name])
-        after = positioned_point(raised_locations[name])
-        delta_z = 0 if name in {"display-base", "front-saddle", "rear-saddle"} else 12
-        assert after == pytest.approx((before[0], before[1], before[2] + delta_z)), name
+    default_locations = default.locations(names="path")
+    raised_locations = raised.locations(names="path")
+    for path in raised_locations:
+        before = positioned_point(default_locations[path])
+        after = positioned_point(raised_locations[path])
+        delta_z = 0 if path.startswith("stand/") else 12
+        assert after == pytest.approx((before[0], before[1], before[2] + delta_z)), path
 
     for saddle_name, shell_name in (
         ("front-saddle", "nacelle-front-lower"),
         ("rear-saddle", "nacelle-rear-lower"),
     ):
-        before = default.instances[saddle_name].part.build()
-        saddle = raised.instances[saddle_name].part.build()
+        before = default.instances["stand"].part.instances[saddle_name].part.build()
+        saddle = raised.instances["stand"].part.instances[saddle_name].part.build()
         assert saddle.BoundingBox().zmax - before.BoundingBox().zmax == pytest.approx(12)
-        installed_saddle = saddle.moved(raised_locations[saddle_name])
-        shell = raised.instances[shell_name].part.build().moved(raised_locations[shell_name])
+        installed_saddle = saddle.moved(raised_locations[f"stand/{saddle_name}"])
+        shell_part = raised.instances["housing"].part.instances[shell_name].part
+        shell = shell_part.build().moved(raised_locations[f"housing/{shell_name}"])
         assert installed_saddle.distance(shell) == pytest.approx(0, abs=1e-6)
         assert installed_saddle.intersect(shell).Volume() == pytest.approx(0, abs=1e-6)
 

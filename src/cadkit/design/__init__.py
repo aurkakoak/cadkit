@@ -9,7 +9,7 @@ from .parts import Part, Feature, FDM, LaserCut
 from .mounts import InsertMount, InsertPocket, Counterbore, ThreadedMount, InsertBoss, MountFeature
 from .manufacturing import (Hole, CounterboredHole, CountersunkHole, TappedHole,
                             BearingSeat, Slot, NutPocket, DBore, SealGroove, Boss)
-from .assembly import Assembly, AssemblyPose, Instance
+from .assembly import Assembly, AssemblyPose, Instance, ComponentRef
 from .purchased import Purchased
 from .motion import Rigid, Revolute, Slider
 from .dimensions import Dimensions, input
@@ -18,4 +18,4 @@ __all__ = ["CaptiveNutFastening", "SetScrew", "Frame", "PolarPattern", "Part", "
            "InsertPocket", "Counterbore", "Assembly", "AssemblyPose", "Purchased",
            "PointPattern", "Rigid", "Revolute", "Slider", "ThreadedMount", "InsertBoss",
            "Hole", "CounterboredHole", "CountersunkHole", "TappedHole", "BearingSeat",
-           "Slot", "NutPocket", "DBore", "SealGroove", "Boss", "Instance", "MountFeature", "Dimensions", "input"]
+           "Slot", "NutPocket", "DBore", "SealGroove", "Boss", "Instance", "ComponentRef", "MountFeature", "Dimensions", "input"]

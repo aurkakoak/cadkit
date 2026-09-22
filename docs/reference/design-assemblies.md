@@ -18,6 +18,18 @@ places a child, while `fasten` adds secondary hardware between already placed
 parts. `attach` adds hardware to existing named features without assigning
 placement. None of these operations implicitly cuts a different part.
 
+`assembly.add(part)` uses the definition's name for the instance. Use
+`assembly.add("left-bracket", part)` when naming a location or repeating the same
+definition. Names must be unique within the containing assembly; CadKit does
+not invent numeric suffixes. The keyword form `add(name="left-bracket",
+part=part)` is also supported.
+
+An omitted display group inherits a manufactured Part's `group`; Purchased
+instances default to `"Purchased"`. Supply
+`group="service-parts"` on `add` to override that instance's display grouping
+without changing the Part's manufacturing group. Nested leaves retain their
+own groups when their containing instance has no group override.
+
 ::: cadkit.Assembly
     options:
       show_root_heading: true
@@ -27,6 +39,8 @@ placement. None of these operations implicitly cuts a different part.
         - add
         - fix
         - export_port
+        - export_component
+        - exported_components
         - connect
         - fasten
         - attach
@@ -50,9 +64,10 @@ placement. None of these operations implicitly cuts a different part.
 
 ## Instance handles
 
-Get an Instance from `assembly.add(...)`. References created by `feature()`
-and `port()` belong to that assembly; they cannot be used with another owner.
-For a nested assembly, expose a port with `export_port` first.
+Get an Instance from `assembly.add(...)`. A leaf instance exposes its local
+`feature()` and `port()` references. A nested instance exposes the definition's
+exported ports through `port()` and its exported contact participants through
+`component()`. Each reference is bound to that installed occurrence.
 
 ::: cadkit.Instance
     options:
@@ -63,6 +78,39 @@ For a nested assembly, expose a port with `export_port` first.
       members:
         - feature
         - port
+        - component
+
+## Contact participants across subsystems
+
+Use `unit.export_component("foot", foot_instance)` to expose a selected Part or
+Purchased leaf. After adding the unit to a parent, `unit_instance.component("foot")`
+returns a scoped `ComponentRef` for use in `assembly.interface(left=..., right=...)`.
+Either side can be a direct leaf owned by the declaring assembly or a component
+reference obtained from one of its nested instances.
+
+Ports expose placement datums; components expose the geometry a contact or
+clearance declaration concerns. Exporting a component does not place it, add
+another occurrence or change its manufacturing definition. A higher-level unit
+can re-export a component reference from one of its own nested instances.
+Export names are unique. Multiple names may refer to the same leaf, but the two
+participants of an interface must resolve to distinct leaves.
+
+References resolve through the selected pose and remain distinct when the same
+subsystem is reused. An interface's optional `region` is expressed in the
+declaring assembly's coordinates; it does not follow one participant's motion
+independently. Referencing a mesh or approximate purchased envelope preserves
+the geometry backend's validation limits.
+
+See [the nested-contact example](../how-to/nested-assemblies.md#check-contact-between-subsystems)
+for a complete runnable project.
+
+::: cadkit.ComponentRef
+    options:
+      show_root_heading: true
+      show_root_full_path: false
+      heading_level: 3
+      show_signature: false
+      members: false
 
 ## Motion relationships
 
@@ -119,5 +167,10 @@ manufacturing definitions, `quantities` for explicit totals, and `parameters` an
 
 Compose reusable subsystems by passing an Assembly to `add()`. Export its public
 attachment datums with `export_port()` and connect the resulting instance just as
-you would a Part. Nested placements and mechanical relationships resolve in the
-selected pose.
+you would a Part. Export contact participants with `export_component()` for
+interfaces declared by the parent. Nested placements and mechanical relationships
+resolve in the selected pose.
+
+`locations()` returns immediate-instance transforms. Use `locations(names="path")`
+for scoped leaf transforms without building geometry, and `models(names="path")`
+when a check needs the corresponding installed shapes.

@@ -63,7 +63,7 @@ Unsigned builds may show a macOS security warning.
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.4.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.0"
 # Save the example above as project.py.
 uv run cadkit --project project:PROJECT build all
 ```

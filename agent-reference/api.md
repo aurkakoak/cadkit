@@ -41,7 +41,7 @@ PLATE = ck.Part(
     manufacture=ck.FDM("PETG"), group="frame",
 )
 assembly = ck.Assembly("example")
-instance = assembly.add("plate", PLATE, group="frame")
+instance = assembly.add(PLATE)
 assembly.fix(instance)
 PROJECT = assembly.as_project(parameters=dimensions.parameters(scope="plate"))
 ```
@@ -77,9 +77,16 @@ registered parts and be positive integers. Set `production=False` for optional
 variants or coupons; `build all` selects only production parts. Explicitly named
 builds can include optional parts. Slicer quantity overrides allow zero.
 
-`Part.group` is the manufacturing group. The `group`, `color`, `material` and
-`explode` arguments to `assembly.add()` control installed display independently;
-an instance's visual material is not its manufacturing material. Stable sibling
+`assembly.add(definition)` infers the instance name from the definition. Use
+`add("left-plate", PLATE)` or `add(name="left-plate", part=PLATE)` for an alias;
+repeated definitions need unique instance names. Names are not automatically
+numbered.
+
+`Part.group` is the manufacturing group and also the default display group for
+its instances. An explicit `group` on `add` overrides display only. Nested leaves
+keep their own groups unless their containing instance overrides the group.
+The `color`, `material` and `explode` arguments also control display; an instance's
+visual material is not its manufacturing material. Stable sibling
 names and hierarchy yield stable desktop paths. Renaming or reparenting creates
 new identities. Discover MCP IDs from the running app instead of storing them
 in source definitions.
@@ -161,6 +168,16 @@ when these references do not answer a question; record such documentation gaps.
 Assembly connections derive hardware, joints and fastenings from the same part
 features. Declare contact and clearance with `assembly.interface()`, and tool
 access with `assembly.access()` or `driver_access()`.
+
+A subsystem publishes selected leaf participants with
+`export_component("foot", foot_instance)`. Its parent uses
+`unit_instance.component("foot")` in `interface(left=..., right=...)`, alongside
+direct owned leaves or exports from another nested instance. Re-export a nested
+component reference to expose it through another level. References follow poses
+and remain scoped to the installed occurrence when a definition is reused.
+Only export the leaves callers need; use ports for placement. Optional interface
+regions remain in the declaring assembly's coordinates. See
+[assemblies](declarative-assemblies.md#contacts-across-subsystems).
 
 For static assemblies, `as_project(joints=..., interfaces=..., fastenings=...)`
 accepts additional installed contracts in project coordinates. These cannot be

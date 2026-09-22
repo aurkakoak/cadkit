@@ -18,7 +18,7 @@ Choose references for the task:
 - Editing geometry and parameters: [modelling loop](references/agent-guide.md).
 - Parts, instances, assemblies and checks: [API](references/api.md).
 - Owned features and shared mounts: [parts](references/declarative.md) and [manufacturing features](references/manufacturing-features.md).
-- Nested assemblies, motion and named poses: [assemblies](references/declarative-assemblies.md).
+- Nested assemblies, exported contact participants, motion and named poses: [assemblies](references/declarative-assemblies.md).
 - Export, Blender and slicing: [workflows](references/workflows.md).
 - MCP tools, measurement and annotation details: [desktop](references/desktop.md).
 - File formats and units: [contracts](references/contracts.md).

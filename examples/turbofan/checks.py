@@ -25,30 +25,34 @@ def intersections(envelopes: tuple[cq.Shape, ...], obstacles: tuple[cq.Shape, ..
 def make_checks(assembly: ck.Assembly, *, pose=None) -> tuple[ck.Check, ...]:
     # Freeze the same graph used for export; building a check cannot follow later edits.
     installed = assembly.pose(pose or {})
-    fixed_groups = {"Casing", "Covers", "Static core", "Combustor", "Display"}
+    stationary = tuple(assembly.instances[name] for name in ("housing", "core", "stand"))
     fixed_names = tuple(
-        name for name, instance in assembly.instances.items() if instance.part.group in fixed_groups
+        f"{unit.name}/{path}" for unit in stationary for path in unit.part.locations(names="path")
     )
 
     @cache
     def models() -> dict[str, cq.Shape]:
-        return {name: model.val() for name, model in installed.models().items()}
+        return {name: model.val() for name, model in installed.models(names="path").items()}
 
     @cache
     def sweeps() -> dict[str, cq.Shape]:
-        locations = installed.locations()
-        result = {"fan": fan_sweep().moved(locations["fan"])}
-        for stage in (*FRONT_ROTOR_STAGES, *HP_STAGES, *REAR_ROTOR_STAGES):
-            result[stage.name] = rotor_sweep(stage).moved(locations[stage.name])
+        locations = installed.locations(names="path")
+        result = {"fan": fan_sweep().moved(locations["low-pressure/fan"])}
+        for unit, stages in (
+            ("low-pressure", (*FRONT_ROTOR_STAGES, *REAR_ROTOR_STAGES)),
+            ("high-pressure", HP_STAGES),
+        ):
+            for stage in stages:
+                result[stage.name] = rotor_sweep(stage).moved(locations[f"{unit}/{stage.name}"])
         return result
 
     def fan_casing_overlap() -> cq.Compound:
         casing = tuple(
             models()[name]
             for name in (
-                "inlet-lip",
-                "nacelle-front-lower",
-                "nacelle-front-cover",
+                "housing/inlet-lip",
+                "housing/nacelle-front-lower",
+                "housing/nacelle-front-cover",
             )
             if name in models()
         )
@@ -56,13 +60,17 @@ def make_checks(assembly: ck.Assembly, *, pose=None) -> tuple[ck.Check, ...]:
 
     def core_rotor_liner_overlap() -> cq.Compound:
         core_rotors = tuple(shape for name, shape in sweeps().items() if name != "fan")
-        return intersections(core_rotors, (models()["core-cutaway"],))
+        return intersections(core_rotors, (models()["core/core-cutaway"],))
 
     def concentric_shaft_overlap() -> cq.Shape:
-        return models()["lp-shaft-front"].intersect(models()["hp-shaft-sleeve"])
+        return models()["low-pressure/lp-shaft-front"].intersect(
+            models()["high-pressure/hp-shaft-sleeve"]
+        )
 
     def shaft_coupling_overlap() -> cq.Shape:
-        return models()["lp-shaft-front"].intersect(models()["lp-shaft-rear"])
+        return models()["low-pressure/lp-shaft-front"].intersect(
+            models()["low-pressure/lp-shaft-rear"]
+        )
 
     def all_rotors_fixed_engine_overlap() -> cq.Compound:
         fixed_parts = tuple(models()[name] for name in fixed_names)

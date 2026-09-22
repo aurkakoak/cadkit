@@ -75,7 +75,7 @@ formula.
 
 Build each part around a useful local datum, such as a mounting face or shaft
 axis. Keep `ck.Part` and `ck.FDM` visible where local geometry, features and
-manufacturing intent are defined. Assembly code uses `add` for instances,
+manufacturing intent are defined. Assembly code uses `add(part)` for instances,
 `fix` for placed roots and `connect` for relationships between datums. Print
 orientation remains separate from installed placement; production selection and
 viewer visibility also have distinct meanings. See [parts and placement](parts-and-placement.md).
@@ -83,14 +83,15 @@ viewer visibility also have distinct meanings. See [parts and placement](parts-a
 Import configuration and construction functions from their owning modules,
 such as `fan.dimensions` and `fan.assembly`. Namespace packages need no
 `__init__.py` files or modules that only re-export names. A reusable
-`ck.Assembly` publishes the attachment ports its parent needs; callers use
-those ports instead of manipulating internal instances.
+`ck.Assembly` publishes attachment datums with `export_port` and selected contact
+participants with `export_component`. Callers use those exports instead of
+manipulating internal instances.
 
 Source folders do not require an identical nested CAD graph. Choose assembly
-boundaries for placement, reuse and mechanical relationships. In particular,
-contact interfaces require participating leaves to share an assembly owner;
-[the assembly reference](../reference/design-assemblies.md#cadkit.Assembly.interface)
-describes the supported scope.
+boundaries for placement, reuse and mechanical relationships. A parent can
+declare contact between exported parts in different subsystems through
+`instance.component(name)`. See [nested contacts](../how-to/nested-assemblies.md#check-contact-between-subsystems)
+for a complete example.
 
 Pure geometry helpers and factories returning meaningful subassemblies keep code
 reusable. Avoid a generic registration helper that secretly creates a Part,

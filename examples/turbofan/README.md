@@ -7,11 +7,15 @@ design decisions, parts own local geometry, and assembly connections own motion.
 
 ## Open and build
 
-Copy this entire `turbofan/` folder into your model directory. With CadKit 0.4
-or later installed, run these commands from the directory containing it:
+Run this example with CadKit 0.5.0 or later.
+Prepare and activate a Python environment with the desktop extra, following
+the [installation guide](../../docs/how-to/install.md). Copy this entire
+`turbofan/` folder into your model directory and run these commands from the
+directory containing it. Pass the same interpreter to the desktop:
 
 ```sh
-cadkit-desktop --project-dir "$PWD" --project turbofan.project:PROJECT
+cadkit-desktop --project-dir "$PWD" --project turbofan.project:PROJECT \
+  --python "$(command -v python)"
 python -m cadkit.cli --project turbofan.project:PROJECT describe
 python -m cadkit.cli --project turbofan.project:PROJECT check --output-dir build/checks
 python -m cadkit.cli --project turbofan.project:PROJECT validate-assembly --output build/validation.json
@@ -23,7 +27,7 @@ No repository internals, project-specific launcher or `__init__.py` files are
 needed. These folders are Python namespace packages; imports name the module
 that owns each definition.
 
-`PROJECT` installs all 39 parts. Hide the **Covers** group for the cutaway reveal,
+`PROJECT` installs all 39 parts. Hide the three upper covers under **housing** for the cutaway reveal,
 or open `turbofan.project:OPEN_PROJECT` to install only the 36 uncovered parts.
 Both projects retain the three covers as optional manufacturing definitions.
 `build all` exports the 36 production parts; request each optional cover by name
@@ -39,8 +43,8 @@ sleeve. The housing and stand stay fixed.
 ```text
 turbofan/
 ├── project.py                  # Entry points, configuration and evidence.
-├── assembly.py                 # Installed parts and spool connections.
-├── interfaces.py               # Contact and clearance requirements.
+├── assembly.py                 # Five subsystems and the two spool connections.
+├── interfaces.py               # Contact and clearance between subsystems.
 ├── checks.py                   # Full-turn envelopes and shaft interference.
 ├── dimensions.py               # Shared shaft fits and engine axis height.
 ├── profiles.py                 # Shared nacelle and core mating surfaces.
@@ -56,15 +60,20 @@ turbofan/
     └── stand/                  # Base, saddles and socket dimensions.
 ```
 
-Each subsystem's `parts.py` exposes its part factory. Its other files contain
-only that subsystem's geometry and specifications. Root `parts/rotor.py` exists
+Each subsystem's `parts.py` exposes its part factory. Its `assembly.py` places
+those parts, declares their internal relationships and exports selected ports
+and contact participants. Its other files contain that subsystem's geometry
+and specifications. Root `parts/rotor.py` exists
 because both spools use the same rotor family; the distinctive fan stays in
 `low_pressure/fan.py`.
 
-The folders describe source ownership. The installed model uses one
-`ck.Assembly`, so contacts between the stand, casing and core can refer directly
-to their participating parts. `assembly.py` shows every `add`, `fix` and
-`connect`; factories return definitions without registering or placing them.
+The installed model contains five nested `ck.Assembly` instances. Root
+`assembly.py` fixes the stand, housing and core, then connects each spool to its
+core journal. Subsystem ports expose the attachment datums; exported components
+let `interfaces.py` describe contacts between their leaves without reaching into
+private instance trees. Each unit uses direct `add`, `fix` and `connect` calls.
+`add(part)` inherits the definition's name and display group; geometry factories
+return definitions without registering or placing them.
 
 | Change | Start here |
 | --- | --- |
@@ -74,13 +83,17 @@ to their participating parts. `assembly.py` shows every `add`, `fix` and
 | Nacelle or core contour | `ShellStation` tables in root `profiles.py` |
 | Base and saddle sizes | `StandDimensions` in `assemblies/stand/dimensions.py` |
 | Spool placement and motion | Connections in root `assembly.py` |
+| Parts within a subsystem | That subsystem's `assembly.py` |
 
 ## Inputs and local coordinates
 
 Lengths are millimetres and angles are degrees. The engine runs along **+X**,
 from the inlet toward the exhaust. Its axis is 108 mm above the base. Parts are
 built around their own shaft axis, leading face or bottom centre; only the
-assembly puts them at an engine station. Manufacturing orientation is separate.
+subsystem assembly puts them at an engine station. Root assembly places the
+subsystems. Manufacturing orientation is separate. Use
+`assembly.locations(names="path")` to inspect the final leaf transforms without
+building geometry; `locations()` reports the five immediate subsystem transforms.
 
 Independent inputs use frozen `ck.Dimensions` dataclasses. Ordinary properties
 derive mating dimensions: the same `ShaftFit` determines a shaft, its keyed

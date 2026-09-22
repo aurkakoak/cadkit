@@ -96,7 +96,10 @@ instance introduces a second authoring language. Do not add that layer merely
 to shorten repeated declarations. Share immutable inputs and process objects
 instead. Use keyword arguments and named data for repeated part families.
 
-Bodies have a stated local datum. Assembly frames place them once; print frames
+Bodies have a stated local datum. `assembly.add(part)` uses its definition name
+and inherits a manufactured Part's group. Use explicit aliases for repeated
+occurrences; instance group overrides affect display only. Assembly frames place
+the bodies once; print frames
 are independent. Use ports for meaningful mating datums and connections for
 relationships. `production=False` controls default manufacturing selection;
 installed presence, viewer visibility and manufacturing quantity are separate.
@@ -104,11 +107,13 @@ Use local `assembly.interface()` declarations for mechanical evidence where
 supported. Static `ck.Joint` records describe evidence; actual motion requires
 connections such as `ck.Revolute` and components attached to the moving unit.
 
-Nested assemblies publish ports for placement. Current `assembly.interface()`
-participants must be leaf instances of that same assembly: an exported port is
-not a reference to a nested contact participant. Keep interacting leaves at a
-common owner when appropriate; record a genuine composition gap rather than
-hiding it behind paths or an invented wrapper API. See [assemblies](declarative-assemblies.md).
+Nested assemblies publish ports for placement and selected leaves with
+`export_component` for contact or clearance. Declare cross-subsystem interfaces
+using `nested_instance.component(export_name)`. These references resolve through
+the instance's pose and can be re-exported by a containing assembly. They avoid
+private paths and flattening subsystems merely to identify contact participants.
+An optional interface region stays in its declaring assembly's coordinates.
+See [assemblies](declarative-assemblies.md#contacts-across-subsystems).
 
 ## A worked example, available with this skill
 

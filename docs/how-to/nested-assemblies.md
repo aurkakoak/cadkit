@@ -26,8 +26,8 @@ ARM = ck.Part(
 )
 
 unit = ck.Assembly("pivot-unit")
-base = unit.add("base", BASE)
-arm = unit.add("arm", ARM)
+base = unit.add(BASE)
+arm = unit.add(ARM)
 unit.fix(base)
 unit.connect(
     "swing", ck.Revolute(position=0, limits=(-90, 90)),
@@ -91,5 +91,67 @@ Named poses and relationships describe placement. They do not prove the
 mechanism is collision-free throughout its travel or that a physical pivot
 exists. Add the intended hardware, interfaces and motion tests separately.
 
+## Check contact between subsystems
+
+Export a selected part with `export_component` when a parent needs to check its
+contact with another subsystem. The parent gets that participant through the
+installed unit's `component()` method. This is separate from exporting a port
+for placement.
+
+Save this complete example as `contacts.py`. Each support contains one pad;
+the two reused supports meet along the pads' vertical side faces.
+
+```python
+import cadquery as cq
+import cadkit as ck
+
+PAD_WIDTH = 20
+PAD_DEPTH = 12
+PAD_HEIGHT = 4
+
+
+def pad_body():
+    # Local X starts at the left edge; the bottom face is Z=0.
+    return cq.Workplane("XY").box(
+        PAD_WIDTH, PAD_DEPTH, PAD_HEIGHT, centered=(False, True, False),
+    )
+
+
+pad = ck.Part("pad", body=pad_body, manufacture=ck.FDM("PETG"), group="supports")
+unit = ck.Assembly("support")
+foot = unit.add(pad)
+unit.fix(foot)
+unit.export_component("foot", foot)
+
+pair = ck.Assembly("pair")
+left = pair.add("left", unit)
+right = pair.add("right", unit)
+pair.fix(left)
+pair.fix(right, at=ck.Frame((PAD_WIDTH, 0, 0)))
+pair.interface(
+    "shared-edge", left=left.component("foot"), right=right.component("foot"),
+    kind="contact", description="The two pads meet at their side faces",
+)
+PROJECT = pair.as_project()
+```
+
+```sh
+uv run cadkit --project contacts:PROJECT validate-assembly --output build/contact-review.json
+```
+
+The declaration resolves to `left/pad` and `right/pad`. The pads share one
+manufacturing definition and inherit its `supports` display group, while each
+reference identifies its own installed occurrence. References also follow
+internal motion when a unit has moving parts.
+
+The report passes the contact check with zero gap and overlap. Assembly sequence
+remains unverified; this declaration checks the installed fit.
+
+A containing assembly can re-export a nested component reference with
+`export_component`, exposing only the participants its own parent needs. An
+interface can combine these references with its directly owned leaf instances.
+If it declares an overlap `region`, that region uses the declaring assembly's
+coordinates and moves with that assembly, independently of either participant.
+
 See [assembly reference](../reference/design-assemblies.md) for exported ports,
-coupled motion and project compilation.
+exported components, coupled motion and project compilation.

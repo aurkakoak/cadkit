@@ -31,8 +31,9 @@ early. Do not infer physical relationships from names, display groups or colour.
 Parts and subsystems should publish the datums and features their callers need.
 The recommended consumer layout colocates subsystem parts, dimensions and
 checks, with project-level parts reserved for reuse across subsystems. A
-subsystem's Python interface and its exported assembly ports should let that
-organization work without callers reaching into private implementation files.
+subsystem's Python interface, exported ports and exported contact participants
+should let that organization work without callers reaching into private
+implementation files.
 Callers should not need private registries, duplicate geometry or knowledge of a
 subsystem's implementation to place it or express a supported relationship.
 Prefer extending an existing responsibility over adding a parallel authoring API.
@@ -42,11 +43,16 @@ a controlling dimension, reuse a part, move a subsystem and inspect its fit
 without rewriting unrelated code? Does the declaration remain understandable
 without a consumer wrapper around every operation?
 
-The current interface API requires two leaf participants owned by the same
-assembly. Exported ports support nested placement, but do not remove that
-mechanical-interface restriction. A proposal to support contacts across subsystem
-boundaries needs explicit participant identity, ownership and pose semantics.
-Document such limits directly; do not teach users an unsupported workaround.
+`add(part)` infers the instance name, and a manufactured instance inherits its
+Part's group unless explicitly overridden. These defaults remove repetition
+while keeping identity and manufacturing ownership clear. Aliases still name
+distinct occurrences; a display override must not mutate a Part.
+
+Nested contacts use explicit exported participants. `export_component` exposes
+a leaf, and `instance.component(name)` binds it to a particular occurrence.
+Preserve that identity through reuse, re-export, motion and project snapshots.
+An interface region belongs to its declaring assembly's frame. Keep component
+references distinct from placement ports and document geometry evidence limits.
 
 ## Keep escape hatches bounded
 

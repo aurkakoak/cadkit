@@ -53,6 +53,8 @@ A manufacturing name such as `bracket` identifies an artifact. Instance names
 such as `left-bracket` and `right-bracket` identify locations. Stable names and
 parentage give the desktop stable paths, so a rebuild can preserve selection,
 visibility and attached notes. Renaming or reparenting creates a new identity.
+`assembly.add(bracket)` uses the definition's name; use explicit aliases such
+as `add("left-bracket", bracket)` for distinct occurrences.
 
 Manufacturing quantities default to the number of installed instances. Pass
 `quantities={"bracket": 6}` to `as_project()` to make a different production total,
@@ -61,9 +63,11 @@ coupons enter through `extra_parts=(COUPON,)`. Set `production=False` on an
 optional definition so it is built only when selected explicitly. Visibility,
 explosion and named poses do not alter manufacturing quantities.
 
-`Part.group` controls manufacturing selections and output folders. An instance's
-`group` controls display organization independently. Hardware quantities come
-from declared fastening sites and stack members, or purchased inventory.
+`Part.group` controls manufacturing selections and output folders. A manufactured
+instance inherits that group for display when `add` omits `group`. An explicit
+instance group changes display organization without changing manufacturing
+selection. Hardware quantities come from declared fastening sites and stack
+members, or purchased inventory.
 
 This distinction also explains why STL and assembled STEP serve different
 purposes: the first commonly describes a part ready for manufacturing, while

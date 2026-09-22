@@ -12,7 +12,7 @@ You need basic Python and a terminal. You may have heard of CadQuery, but you do
 not need an existing CadQuery project. The tutorial explains the few geometry
 operations it uses. Allow about an hour, plus the initial dependency download.
 
-The code uses CadKit 0.4.0. All six chapters have complete, runnable example
+The code uses CadKit 0.5.0. All six chapters have complete, runnable example
 files. Follow along in one `enclosure.py`, or use a chapter's example to restart at that point.
 
 | Chapter | What you will have | Complete example |

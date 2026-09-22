@@ -82,3 +82,6 @@ LOW_PRESSURE_FRONT_JOURNAL = 57.0
 LOW_PRESSURE_REAR_JOURNAL = 276.0
 HIGH_PRESSURE_FRONT_JOURNAL = 111.0
 HIGH_PRESSURE_REAR_JOURNAL = 232.5
+
+# Minimum accepted gap is this far below each designed nominal clearance, in mm.
+MEASUREMENT_ALLOWANCE = 0.01
