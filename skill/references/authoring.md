@@ -26,7 +26,6 @@ project.py                     # Compose the complete machine.
 parts/                         # Parts reused across different subsystems.
 assemblies/
     fan/
-        __init__.py            # The subsystem's public interface.
         dimensions.py          # Fan inputs, profiles and derived dimensions.
         parts/                 # Fan-specific definitions; parts.py also works.
         assembly.py            # Local placement and relationships.
@@ -42,11 +41,13 @@ project-level `parts/` when it is needed across subsystems. Do not create empty
 folders or move a part merely because it has two instances within one subsystem.
 Avoid miscellaneous `utils.py` collections with unrelated responsibilities.
 
-A subsystem publishes its construction function and the configuration its
-callers need through `__init__.py`; a nested CadKit Assembly publishes attachment
-ports. Other subsystems should not import its private parts or mutate its
-internal instances. Dependencies run from inputs to parts to assemblies to the
-project. A part must not import its containing project to discover dimensions.
+A subsystem exposes its construction functions and configuration from their
+owning modules. Prefer explicit imports such as `fan.dimensions` and
+`fan.assembly`; namespace packages need no `__init__.py` files or barrel modules
+that only re-export names. A nested CadKit Assembly publishes attachment ports.
+Other subsystems should not mutate its internal instances. Dependencies run
+from inputs to parts to assemblies to the project. A part must not import its
+containing project to discover dimensions.
 File organization does not require every folder to become a nested CAD assembly:
 choose graph ownership according to real placement and interface relationships.
 
@@ -129,7 +130,10 @@ files relevant to the edit; they form one ordinary Python package:
 This is the recommended default; use a different layout when an existing
 convention or a concrete design need justifies it. The public
 [project-structure guide](https://aurkakoak.github.io/cadkit/docs/explanation/project-structure/) explains the
-same defaults for human readers.
+same defaults for human readers. The larger
+[turbofan example](https://github.com/aurkakoak/cadkit/tree/main/examples/turbofan)
+uses explicit module imports and shared profiles to compose a housing, two
+spools, stationary core and display stand.
 
 ## Review the edit a person will make next
 

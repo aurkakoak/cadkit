@@ -13,7 +13,6 @@ turbofan/
 │   └── bearing_carrier.py     # Reused by multiple subsystems.
 └── assemblies/
     ├── fan/
-    │   ├── __init__.py
     │   ├── dimensions.py
     │   ├── parts/
     │   │   ├── rotor.py
@@ -37,7 +36,6 @@ instances within one subsystem do not require that move.
 | `parts.py` or `parts/` | Local geometry, owned features, ports and manufacturing definitions |
 | `assembly.py` | Installed instances, placement and mechanical relationships |
 | `checks.py` | The subsystem’s requirements and geometric evidence |
-| `__init__.py` | The subsystem’s public configuration and factories |
 | `project.py` | Compose subsystems, collect evidence and compile `PROJECT` |
 
 Dependencies flow from inputs to parts to assemblies to project composition.
@@ -82,9 +80,11 @@ manufacturing intent are defined. Assembly code uses `add` for instances,
 orientation remains separate from installed placement; production selection and
 viewer visibility also have distinct meanings. See [parts and placement](parts-and-placement.md).
 
-A subsystem exposes its configuration and construction functions through
-`__init__.py`. A reusable `ck.Assembly` publishes the attachment ports its parent
-needs. Callers use that interface instead of manipulating internal instances.
+Import configuration and construction functions from their owning modules,
+such as `fan.dimensions` and `fan.assembly`. Namespace packages need no
+`__init__.py` files or modules that only re-export names. A reusable
+`ck.Assembly` publishes the attachment ports its parent needs; callers use
+those ports instead of manipulating internal instances.
 
 Source folders do not require an identical nested CAD graph. Choose assembly
 boundaries for placement, reuse and mechanical relationships. In particular,
@@ -98,7 +98,12 @@ chooses its manufacturing process, places it and controls visibility. Those
 decisions should remain visible at CadKit call sites. Geometry builders should
 stay lazy and free of file-writing or viewer side effects.
 
-## Follow a complete example
+## Follow complete examples
+
+The [turbofan example](../../examples/turbofan/README.md) applies this layout to
+a complete sectional engine: housing, two rotating spools, stationary core and
+display stand. Shared profiles define the shells and their mating supports;
+explicit module imports connect the subsystems.
 
 The [shaft-support example](../../examples/shaft_support/README.md) keeps its
 bearing unit together under `assemblies/bearing_unit/`. Follow its
