@@ -42,7 +42,8 @@ def skill_archive(directory: Path, release_version: str) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(directory / f"cadkit-skill-{release_version}.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for source in sorted((ROOT / "skill").rglob("*")):
-            if source.is_file():
+            if (source.is_file() and "__pycache__" not in source.relative_to(ROOT / "skill").parts
+                    and source.suffix not in (".pyc", ".pyo")):
                 archive.write(source, Path("cadkit") / source.relative_to(ROOT / "skill"))
 
 

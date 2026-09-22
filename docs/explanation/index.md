@@ -6,6 +6,8 @@ For a specific task, use the [how-to guides](../how-to/index.md).
 
 - [CadQuery and CadKit](cadquery-and-cadkit.md): what each library owns and
   how local bodies, features and assembly definitions fit together.
+- [Structure a readable project](project-structure.md): dimension ownership,
+  local geometry, explicit assemblies and clear module responsibilities.
 - [Parts, instances and placement](parts-and-placement.md): design geometry,
   installed geometry and manufacturing orientation.
 - [Validation and evidence](validation-and-evidence.md): what checks establish,

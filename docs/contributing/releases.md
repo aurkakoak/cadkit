@@ -72,8 +72,8 @@ npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
 4. Push a tag matching the version:
 
    ```sh
-   git tag v0.3.0
-   git push origin main v0.3.0
+   git tag v0.4.0
+   git push origin main v0.4.0
    ```
 
 The Release workflow tests the code, builds all four native targets, launches
@@ -129,7 +129,7 @@ To select a specific macOS version or location:
 
 ```sh
 curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | \
-  CADKIT_VERSION=0.3.0 CADKIT_INSTALL_DIR="$HOME/Applications" sh
+  CADKIT_VERSION=0.4.0 CADKIT_INSTALL_DIR="$HOME/Applications" sh
 ```
 
 The script requires a published release; a draft or Actions artifact is not

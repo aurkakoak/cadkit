@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import py_compile
 import re
 import sys
 from urllib.parse import unquote, urlsplit
@@ -219,3 +220,23 @@ def test_skill_stays_self_contained_without_copying_human_autodoc_pages(document
             url = urlsplit(match[2])
             if not url.scheme:
                 assert (source.parent / unquote(url.path)).resolve() in generated
+
+
+def test_running_a_bundled_example_does_not_make_skill_sources_stale(
+    documentation_tools, tmp_path, monkeypatch,
+):
+    references, _ = documentation_tools
+    write(tmp_path, "agent-reference/guide.md", "[Example](../examples/model.py)\n")
+    write(tmp_path, "examples/model.py", "DIMENSION = 10\n")
+    write(tmp_path, "desktop/README.md", "# Desktop\n")
+    write(tmp_path, "skill/SKILL.md", "[Guide](references/guide.md)\n")
+    monkeypatch.setattr(sys, "argv", ["sync_skill"])
+    assert references.main() == 0
+    py_compile.compile(
+        str(tmp_path / "skill/references/examples/model.py"), doraise=True,
+    )
+    monkeypatch.setattr(sys, "argv", ["sync_skill", "--check"])
+    assert references.main() == 0
+    # Ignoring bytecode must not hide genuinely obsolete authored resources.
+    write(tmp_path, "skill/references/obsolete.md", "Stale guidance\n")
+    assert references.main() == 1

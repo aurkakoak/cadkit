@@ -4,6 +4,12 @@ CadKit gives a CadQuery model named parts, assemblies, manufacturing information
 and checks. You keep writing Python geometry and use CadKit to inspect it,
 export it and work on it with an agent.
 
+CadKit's recommended structure keeps design inputs, local part geometry,
+manufacturing and assembly placement explicit. Start small, then compose parts
+and subsystems around their responsibilities. See
+[project structure and design intent](explanation/project-structure.md) for the
+defaults, a runnable example and the boundaries of supported escape hatches.
+
 **Start with [Make a box and lid](tutorials/index.md).** The tutorial begins with
 two ordinary CadQuery shapes. You will turn them into a project, inspect and
 export the parts, fasten the lid, test a design change and give an agent a small

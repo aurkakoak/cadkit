@@ -12,9 +12,10 @@ from .manufacturing import (Hole, CounterboredHole, CountersunkHole, TappedHole,
 from .assembly import Assembly, AssemblyPose, Instance
 from .purchased import Purchased
 from .motion import Rigid, Revolute, Slider
+from .dimensions import Dimensions, input
 
 __all__ = ["CaptiveNutFastening", "SetScrew", "Frame", "PolarPattern", "Part", "Feature", "FDM", "LaserCut", "InsertMount",
            "InsertPocket", "Counterbore", "Assembly", "AssemblyPose", "Purchased",
            "PointPattern", "Rigid", "Revolute", "Slider", "ThreadedMount", "InsertBoss",
            "Hole", "CounterboredHole", "CountersunkHole", "TappedHole", "BearingSeat",
-           "Slot", "NutPocket", "DBore", "SealGroove", "Boss", "Instance", "MountFeature"]
+           "Slot", "NutPocket", "DBore", "SealGroove", "Boss", "Instance", "MountFeature", "Dimensions", "input"]

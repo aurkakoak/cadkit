@@ -6,9 +6,11 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import py_compile
 import subprocess
 import sys
 import tarfile
+import zipfile
 
 import pytest
 
@@ -46,6 +48,22 @@ def test_release_tag_must_match_packages():
                              "--tag", "v999.0.0"], capture_output=True, text=True)
     assert result.returncode != 0
     assert "Tag must be" in result.stderr
+
+
+def test_skill_archive_keeps_example_sources_without_interpreter_caches(tmp_path, monkeypatch):
+    root = tmp_path / "source"
+    example = root / "skill/references/examples/model.py"
+    example.parent.mkdir(parents=True)
+    example.write_text("DIMENSION = 10\n")
+    (root / "skill/SKILL.md").write_text("# Skill\n")
+    py_compile.compile(str(example), doraise=True)
+    monkeypatch.setattr(release, "ROOT", root)
+    output = tmp_path / "dist"
+    release.skill_archive(output, "0.3.0")
+    with zipfile.ZipFile(output / "cadkit-skill-0.3.0.zip") as archive:
+        assert set(archive.namelist()) == {
+            "cadkit/SKILL.md", "cadkit/references/examples/model.py",
+        }
 
 
 @pytest.fixture

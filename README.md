@@ -7,22 +7,41 @@
 import cadquery as cq
 import cadkit as ck
 
+PLATE_LENGTH = 60
+PLATE_WIDTH = 24
+PLATE_THICKNESS = 6
+MOUNT_EDGE_DISTANCE = 10
+MOUNT_HOLE_DIAMETER = 4.3
+MOUNT_X = PLATE_LENGTH / 2 - MOUNT_EDGE_DISTANCE
+
+
+def plate_body():
+    # Local datum: centre of the bottom face. Dimensions are millimetres.
+    return cq.Workplane("XY").rect(PLATE_LENGTH, PLATE_WIDTH).extrude(PLATE_THICKNESS)
+
+
 plate = ck.Part(
     "plate",
-    body=lambda: cq.Workplane("XY").rect(60, 24).extrude(6),
+    body=plate_body,
     manufacture=ck.FDM("PETG"),
     features={
         "mounting-holes": ck.Hole(
-            diameter=4.3, depth=6, through=True,
-            pattern=ck.PointPattern(((-20, 0), (20, 0))),
+            diameter=MOUNT_HOLE_DIAMETER, depth=PLATE_THICKNESS, through=True,
+            pattern=ck.PointPattern(((-MOUNT_X, 0), (MOUNT_X, 0))),
         ),
     },
 )
 
 assembly = ck.Assembly("bracket")
-assembly.fix(assembly.add("plate", plate))
+installed_plate = assembly.add("plate", plate)
+assembly.fix(installed_plate)
 PROJECT = assembly.as_project()
 ```
+
+CadKit favours explicit design intent: named inputs drive local parts, parts own
+their manufacturing definitions, and assemblies own placement and relationships.
+The [project-structure guide](docs/explanation/project-structure.md) shows how to
+grow this into cohesive modules, with a runnable example and supported escape hatches.
 
 ## Install
 
@@ -44,7 +63,7 @@ Unsigned builds may show a macOS security warning.
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.3.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.4.0"
 # Save the example above as project.py.
 uv run cadkit --project project:PROJECT build all
 ```

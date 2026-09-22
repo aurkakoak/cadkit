@@ -86,7 +86,8 @@ def main():
             "__pycache__", "*.pyc", "test_release.py", "test_documentation.py"))
         shutil.copytree(source / "desktop", root / "desktop", ignore=shutil.ignore_patterns(
             "node_modules", "dist", "bundle", "release", "test-results", "playwright-report", ".DS_Store"))
-        shutil.copytree(source / "skill", root / "skills" / "cadkit")
+        shutil.copytree(source / "skill", root / "skills" / "cadkit",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
         # Trials carry the human book's nested sources and agent references
         # independently. Never include local drafts in either distribution.
         shutil.copytree(source / "docs", root / "docs",

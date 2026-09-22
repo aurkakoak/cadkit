@@ -12,6 +12,7 @@ are separate tasks, not prerequisites to repeat each session.
 
 Choose references for the task:
 
+- Creating parts, growing a project or reviewing its structure: [authoring principles](references/authoring.md). Use these defaults for code a person can understand and change.
 - Working alongside the user in the app: [interaction](references/interaction.md).
 - Joints, intended interfaces, cq_warehouse fasteners and assembly validation: [mechanics](references/mechanics.md).
 - Editing geometry and parameters: [modelling loop](references/agent-guide.md).
@@ -40,11 +41,26 @@ transforms, applied once. Assemblies compose local frames, including nested
 units and motion. Preserve quantities, materials, variants and geometry
 provenance; optional uninstalled definitions belong in `extra_parts`. Parameters describe source inputs; they are not live UI setters.
 
+Make design intent visible: name independent dimensions, derive mating geometry
+from shared inputs, and keep local shape, manufacturing and installed placement
+separate. For a coherent input set, use a frozen, keyword-only dataclass extending
+`ck.Dimensions`, declare fields with `ck.input`, and publish its `parameters()`.
+Keep calculated dimensions as properties and rebuild from a changed configuration.
+Use CadKit declarations directly; avoid a project-specific registration
+wrapper that hides those responsibilities. As a project grows, colocate each
+subsystem's parts, dimensions and checks under `assemblies/<subsystem>/`;
+promote parts reused across subsystems to project-level `parts/`. Respect an
+existing project's conventions and the
+user's chosen escape hatches; a small edit does not authorize a wholesale rewrite.
+
 Use `describe` and `inspect` for discovery. After a geometry edit, run relevant
 consumer tests and CadKit checks and inspect the changed geometry visually.
 For a live app, confirm a successful new build before reporting the result:
 a failed rebuild retains the old model. A valid solid or an empty passing
 check set alone does not establish fit or manufacturing readiness.
+Review the source as well: meaningful inputs must affect the intended geometry,
+shared dimensions must have one owner, and a reader must be able to find a part's
+body, manufacturing definition and placement without tracing hidden side effects.
 
 Follow the consumer setup for the active CadKit runtime. An installed
 `release.json` identifies a supplied trial, but an explicit development-source

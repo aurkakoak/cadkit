@@ -109,6 +109,7 @@ nav:
       - explanation/index.md
       - CadQuery and CadKit: explanation/cadquery-and-cadkit.md
       - Parts and placement: explanation/parts-and-placement.md
+      - Project structure and design intent: explanation/project-structure.md
       - Validation and evidence: explanation/validation-and-evidence.md
       - Working with an agent: explanation/agent-workflow.md
   - Reference:
@@ -127,6 +128,7 @@ nav:
       - Files, schemas and units: reference/contracts.md
   - Contributing:
       - Writing documentation: contributing/documentation.md
+      - API design principles: contributing/api-design.md
       - Releases and publishing: contributing/releases.md
       - Trial bundles: contributing/trials.md
 validation:

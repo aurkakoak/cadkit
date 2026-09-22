@@ -58,7 +58,7 @@ and create a project environment:
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.3.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.4.0"
 # Add your project.py, then:
 uv run cadkit --project project:PROJECT build all
 ```

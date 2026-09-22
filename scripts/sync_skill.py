@@ -92,7 +92,12 @@ def main() -> int:
         if not target.is_relative_to(entrypoint.parent) or (target not in expected and not target.is_file()):
             raise ValueError(f"Broken skill entrypoint link: {match[2]}")
     existing = set(REFERENCES.rglob("*")) if REFERENCES.exists() else set()
-    stale = sorted(path for path in existing if path.is_file() and path not in expected)
+    stale = sorted(
+        path for path in existing
+        if path.is_file() and path not in expected
+        and "__pycache__" not in path.relative_to(REFERENCES).parts
+        and path.suffix not in (".pyc", ".pyo")
+    )
     changed = sorted(path for path, content in expected.items() if not path.exists() or path.read_bytes() != content)
     if args.check:
         for path in changed + stale:

@@ -8,24 +8,42 @@ cheap; generate geometry inside lazy body builders.
 ## Project and geometry
 
 ```python
+from dataclasses import dataclass
+from functools import partial
 import cadquery as cq
 import cadkit as ck
 
-THICKNESS = 6
+
+@dataclass(frozen=True, kw_only=True)
+class PlateDimensions(ck.Dimensions):
+    width: float = ck.input(
+        default=30.0, unit="mm", description="Plate width", gt=0,
+    )
+    depth: float = ck.input(
+        default=20.0, unit="mm", description="Plate depth", gt=0,
+    )
+    thickness: float = ck.input(
+        default=6.0, unit="mm", description="Plate thickness", gt=0,
+    )
 
 
-def plate():
-    return cq.Workplane("XY").box(30, 20, THICKNESS).val()
+def plate_body(dimensions):
+    # The origin is the centre of the bottom face.
+    return cq.Workplane("XY").box(
+        dimensions.width, dimensions.depth, dimensions.thickness,
+        centered=(True, True, False),
+    ).val()
 
 
-PLATE = ck.Part("plate", body=plate, manufacture=ck.FDM("PETG"), group="frame")
-assembly = ck.Assembly("example")
-instance = assembly.add("plate", PLATE, group="frame", explode=(0, 0, 15))
-assembly.fix(instance, at=ck.Frame((0, 0, 40)))
-PROJECT = assembly.as_project(
-    parameters=(ck.Parameter("thickness", THICKNESS, "mm", "Plate thickness",
-                             "my_cad/project.py", measured=False),),
+dimensions = PlateDimensions()
+PLATE = ck.Part(
+    "plate", body=partial(plate_body, dimensions),
+    manufacture=ck.FDM("PETG"), group="frame",
 )
+assembly = ck.Assembly("example")
+instance = assembly.add("plate", PLATE, group="frame")
+assembly.fix(instance)
+PROJECT = assembly.as_project(parameters=dimensions.parameters(scope="plate"))
 ```
 
 Builders return one valid `cq.Workplane`, `cq.Shape`, or explicit
@@ -36,6 +54,8 @@ transform once, including nested assemblies. All linear coordinates use millimet
 
 | Contract | Fields and behavior |
 | --- | --- |
+| `Dimensions` | Frozen, keyword-only dataclass base for typed inputs, common validation, a custom `validate()` hook and `parameters(scope="")` metadata |
+| `input` | Dataclass field declaration with optional `default`, `unit`, `description` and numeric `gt`, `ge`, `lt`, `le` bounds |
 | `Part` | Required `name`, zero-argument `body`, `manufacture`; optional named `features`, `ports`, native `finalize`, `group="parts"`, `description=""`, `notes=""`, `production=True`, `expected_solids=1` |
 | `FDM` | Explicit `material`, `print_rotation=(0,0,0)` or keyword `print_frame`; print transform is independent of installed placement |
 | `Purchased` | Local body, ports and explicit features; supplier identity, description, qualified representation and per-instance quantity; omitted from printable inventory |
@@ -69,6 +89,37 @@ Use `name_pose("service", {...})` to supply named views to CLI
 named-view selector; `assembly.pose(...).as_project()` selects a pose explicitly.
 Geometry, graph hardware and interfaces resolve from that pose. Visibility and
 explosion never alter manufacturing quantities.
+
+## Design inputs
+
+Each instance field in a `ck.Dimensions` subclass must use `ck.input` and be
+annotated `float`, `int`, `bool` or `str`. All constructor arguments are keyword
+arguments. Omit `default` for a required input. A `float` field also accepts an
+integer value, excluding booleans; the other field types are checked strictly.
+Numeric values must be finite. Numeric bounds are checked during construction,
+followed by the class's `validate()` method for cross-field rules. Override that
+method when needed; overriding `__post_init__` is rejected.
+
+Derived dimensions are ordinary properties and do not appear in generated
+parameter metadata. Profile tables and other structured shape data remain
+separate named records. Use `dataclasses.replace(dimensions, width=40.0)` to
+create and validate a variant, then pass it to the body and assembly builders
+and compile the corresponding metadata. There is no automatic dependency
+tracking or live editing of an existing Project.
+
+`dimensions.parameters(scope="plate")` returns `ck.Parameter` records named
+`plate.width`, `plate.depth` and `plate.thickness`, with their current values,
+units, descriptions and the declaring class's source file when available.
+Scope is a metadata prefix; it does not rename a part or an assembly path.
+Unit strings label values without converting them. Supply lengths in millimetres
+and angles in the units required by the API using them.
+
+Direct `ck.Parameter(name, value, unit, description, source, measured=False)`
+records are also accepted by `as_project(parameters=...)`. Use them for measured
+or externally supplied metadata that is not owned by a Dimensions configuration;
+set `measured=True` for measurements. Neither form wires a value into geometry:
+the builders must consume the authored input. See [authoring](authoring.md) for
+dimension ownership and subsystem organization.
 
 ## Checks
 
