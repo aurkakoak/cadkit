@@ -65,8 +65,18 @@ stay the same. Each manufactured definition has quantity two in the compiled
 Project. Both instances share the unit's definition, but `left/swing` and
 `right/swing` address separate motion coordinates.
 
-The desktop shows the Project's default pose; it currently has no named-view
-selector. To inspect the open pose there, change the final line to:
+The desktop starts in the Project's default pose. In the inspector, **Motion**
+provides angle controls and independent **Play / Pause** for revolute joints.
+Signed **rpm** sets speed and direction. Playback stops at declared limits;
+coupled joints follow their driver. **Reset** restores the authored pose.
+
+This only transforms displayed meshes. Parts, manufacturing exports and Python
+files remain unchanged. Return to the installed pose for measurements and Blender
+renders; running checks resets the preview. Rebuilding or reopening the project
+also resets motion. Preview does not test collisions or load capacity.
+
+There is no named-view selector. To open a named arrangement by default, change
+the final line to:
 
 ```python
 PROJECT = machine.pose({"left/swing": 60, "right/swing": -60}).as_project()

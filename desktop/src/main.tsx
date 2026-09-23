@@ -43,6 +43,8 @@ import {
 } from "lucide-react";
 import "three-cad-viewer/css";
 import "./style.css";
+import { MotionPlayer } from "./motion";
+import { MotionPanel } from "./MotionPanel";
 import { RenderPanel } from "./RenderPanel";
 import { SlicerPanel } from "./SlicerPanel";
 import { HomeScreen, ProjectOpener } from "./HomeScreen";
@@ -278,7 +280,26 @@ function ProjectWorkbench({
       ),
     [scene, hardwareView, selectedHardwareIds],
   );
-  const previewActive = offsets.size > 0;
+  const motionPlayer = useMemo(
+    () =>
+      scene?.mechanics?.motion?.joints.length
+        ? new MotionPlayer(scene.mechanics.motion)
+        : null,
+    [scene?.revision],
+  );
+  const [motionActive, setMotionActive] = useState(false);
+  useEffect(() => {
+    setMotionActive(false);
+    if (!motionPlayer) return;
+    const off = motionPlayer.subscribe(() =>
+      setMotionActive(motionPlayer.getSnapshot().active),
+    );
+    return () => {
+      off();
+      motionPlayer.dispose();
+    };
+  }, [motionPlayer]);
+  const previewActive = offsets.size > 0 || motionActive;
   const [partName, setPartName] = useState<string | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [measuring, setMeasuring] = useState(false);
@@ -417,11 +438,15 @@ function ProjectWorkbench({
       });
   }, [selected, scene?.revision, selectedConnection, previewActive]);
 
-  const resetPreview = () =>
+  const resetHardwarePreview = () =>
     setHardwareView((before) => ({ ...before, previewProgress: 0 }));
+  const resetPreview = () => {
+    resetHardwarePreview();
+    motionPlayer?.reset();
+  };
   const pick = (id: string, multiple = false) => {
     setSelectedConnection(null);
-    resetPreview();
+    resetHardwarePreview();
     setPartName(null);
     setSelected((before) =>
       multiple
@@ -489,6 +514,7 @@ function ProjectWorkbench({
     });
   const runValidation = async (parts?: string[]) => {
     if (!scene) throw new Error("Build a project first");
+    motionPlayer?.reset();
     setValidating(true);
     setValidationError("");
     try {
@@ -600,7 +626,12 @@ function ProjectWorkbench({
     selectedConnectionDetails: connection ?? null,
     hardwareView,
     presentation: {
-      pose: previewActive ? "hardware-preview" : "installed",
+      pose: motionActive
+        ? "motion-preview"
+        : previewActive
+          ? "hardware-preview"
+          : "installed",
+      jointPositions: motionPlayer?.getSnapshot().values ?? {},
       measurementFrame: "installed",
       offsetIds: [...offsets.keys()],
     },
@@ -761,9 +792,7 @@ function ProjectWorkbench({
       viewportApi.current.camera(params);
     } else if (method === "show_measurement") {
       if (previewActive)
-        throw new Error(
-          "Return hardware preview to the installed pose before measuring",
-        );
+        throw new Error("Return to the installed pose before measuring");
       expand(params.ids, true);
       forcedMeasurement.current = params;
       flushSync(() => {
@@ -1231,7 +1260,10 @@ function ProjectWorkbench({
               canPreview={scene.components.some((c) =>
                 c.metadata?.preview_offset_mm?.some((v) => v !== 0),
               )}
-              onChange={setHardwareView}
+              onChange={(view) => {
+                if (view.previewProgress) motionPlayer?.reset();
+                setHardwareView(view);
+              }}
             />
           )}
           <div className="navigator-footer">
@@ -1280,16 +1312,22 @@ function ProjectWorkbench({
                 selected={selected}
                 measurement={previewActive ? null : measurement}
                 previewOffsets={offsets}
+                motionPlayer={motionPlayer}
+                motionActive={motionActive}
                 onResetPreview={resetPreview}
                 connectionGuides={
-                  connection && "origin" in connection
+                  !motionActive && connection && "origin" in connection
                     ? [{ origin: connection.origin, axis: connection.axis }]
                     : connection && "sites" in connection
                       ? connection.sites
                       : []
                 }
-                annotations={annotations}
-                highlights={highlights}
+                annotations={motionActive ? [] : annotations}
+                highlights={
+                  motionActive
+                    ? { ids: [], color: highlights.color }
+                    : highlights
+                }
                 api={viewportApi}
                 onClearAnnotations={() => setAnnotations([])}
                 onEditAnnotation={setEditingAnnotation}
@@ -1375,6 +1413,12 @@ function ProjectWorkbench({
             )}
           </div>
           <div className="inspector-content">
+            {motionPlayer && (
+              <MotionPanel
+                player={motionPlayer}
+                onStart={resetHardwarePreview}
+              />
+            )}
             {connection && selectedConnection && scene ? (
               <ConnectionInspector
                 connection={connection}

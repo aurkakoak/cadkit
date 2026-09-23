@@ -113,6 +113,16 @@ Opening a project executes its Python builders, just like the CadKit CLI.
   revision-scoped and recalculated after a successful rebuild.
 
 Measurements use whole objects; face/edge/axis selection is not available.
+
+**Motion** in the inspector provides revolute-joint angle controls, independent
+play/pause, signed rpm and reset. Parent/child relationships, attached descendants,
+couplings, limits and generated hardware come from the framework's transform graph.
+Playback changes display transforms only: it does not rebuild, edit Parts or save
+Python files. Measurements and Blender renders require the installed pose; running
+checks resets the preview. A rebuild or project change also resets it. Playback
+stops at limits and does not establish collision-free motion. Additional fastening
+constraints can disable a joint's preview.
+
 The **Render** panel uses the shared Blender pipeline for PNG images, explosion
 animations and editable `.blend` scenes. It exports the current installed geometry,
 including meshes, without rebuilding the project. Select visible, all or selected

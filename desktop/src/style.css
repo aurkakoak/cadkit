@@ -2262,3 +2262,57 @@ dd {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+
+.motion-panel h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.motion-joint + .motion-joint {
+  margin-top: 20px;
+}
+.motion-joint h3 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+.motion-coordinate,
+.motion-playback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.motion-coordinate input {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.motion-coordinate output {
+  min-width: 52px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.motion-playback {
+  margin-top: 8px;
+}
+.motion-playback label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.motion-playback input {
+  width: 60px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+}
+.motion-joint small {
+  display: block;
+  color: var(--muted);
+  margin-top: 8px;
+}

@@ -300,15 +300,43 @@ export function ConnectionInspector({
         <p className="inline-error">{connection.resolution_error}</p>
       )}
       <section className="detail-section">
-        <h2>Components</h2>
-        <div className="connection-members">
-          {connection.component_ids.map((id) => (
-            <button key={id} title={id} onClick={() => onPick(id)}>
-              <Eye size={13} />
-              <span>{componentLabel(scene, id)}</span>
-            </button>
-          ))}
-        </div>
+        {joint?.parent_components?.length ? (
+          <>
+            {[
+              { label: "Parent", ids: joint.parent_components },
+              {
+                label: joint.kind === "rigid" ? "Child" : "Moving",
+                ids: joint.moving_components?.length
+                  ? joint.moving_components
+                  : (joint.child_components ?? []),
+              },
+            ].map((side) => (
+              <div key={side.label}>
+                <h2>{side.label}</h2>
+                <div className="connection-members">
+                  {side.ids.map((id) => (
+                    <button key={id} title={id} onClick={() => onPick(id)}>
+                      <Eye size={13} />
+                      <span>{componentLabel(scene, id)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <h2>Components</h2>
+            <div className="connection-members">
+              {connection.component_ids.map((id) => (
+                <button key={id} title={id} onClick={() => onPick(id)}>
+                  <Eye size={13} />
+                  <span>{componentLabel(scene, id)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <button
           className="quiet-button full-width isolate-button"
           aria-pressed={isolated}

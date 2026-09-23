@@ -14,6 +14,7 @@ import {
   LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
+  Matrix4,
   SphereGeometry,
   Vector3,
 } from "three";
@@ -35,6 +36,8 @@ import type {
   Vector,
 } from "./types";
 
+import type { MotionPlayer } from "./motion";
+import { transforms } from "./motionTransforms";
 import { displaySnapshot } from "./mechanics";
 
 interface Props {
@@ -47,6 +50,8 @@ interface Props {
   highlights: { ids: string[]; color: string };
   api: React.RefObject<ViewportApi | null>;
   previewOffsets: Map<string, Vector>;
+  motionPlayer?: MotionPlayer | null;
+  motionActive?: boolean;
   onResetPreview: () => void;
   connectionGuides?: { origin: Vector; axis: Vector }[];
   onClearAnnotations: () => void;
@@ -261,31 +266,50 @@ export function Viewport(props: Props) {
   useEffect(() => {
     const viewer = instance.current;
     if (!viewer || !ready) return;
-    const originals: { group: Group; position: Vector3 }[] = [];
-    for (const [id, offset] of props.previewOffsets) {
+    const player = props.motionPlayer;
+    const originals = new Map<
+      string,
+      { group: Group; local: Matrix4; world: Matrix4 }
+    >();
+    for (const { id } of props.scene.components) {
       const group = viewer.nestedGroup.groups[id];
       if (!group) continue;
-      originals.push({ group, position: group.position.clone() });
-      group.parent?.updateWorldMatrix(true, false);
-      const origin = group.parent?.worldToLocal(new Vector3()) ?? new Vector3();
-      const destination =
-        group.parent?.worldToLocal(new Vector3(...offset)) ??
-        new Vector3(...offset);
-      group.position.add(destination.sub(origin));
-      group.updateWorldMatrix(false, true);
+      group.updateWorldMatrix(true, false);
+      originals.set(id, {
+        group,
+        local: group.matrix.clone(),
+        world: group.matrixWorld.clone(),
+      });
     }
-    viewer.update(true);
+    const draw = (values: Record<string, number>) => {
+      const deltas = player
+        ? transforms(player.graph, values)
+        : new Map<string, Matrix4>();
+      for (const [id, { group, world }] of originals) {
+        const delta = deltas.get(id)?.clone() ?? new Matrix4();
+        const offset = props.previewOffsets.get(id);
+        if (offset) delta.multiply(new Matrix4().makeTranslation(...offset));
+        const parent = group.parent?.matrixWorld ?? new Matrix4();
+        const local = parent.clone().invert().multiply(delta).multiply(world);
+        local.decompose(group.position, group.quaternion, group.scale);
+        group.updateWorldMatrix(false, true);
+      }
+      viewer.update(true);
+    };
+    const off = player?.onFrame(draw);
+    if (!player) draw({});
     return () => {
-      for (const { group, position } of originals) {
-        group.position.copy(position);
+      off?.();
+      for (const { group, local } of originals.values()) {
+        local.decompose(group.position, group.quaternion, group.scale);
         group.updateWorldMatrix(false, true);
       }
     };
-  }, [props.previewOffsets, ready]);
+  }, [props.motionPlayer, props.previewOffsets, ready]);
 
   useEffect(() => {
     const viewer = instance.current;
-    if (!viewer || !ready) return;
+    if (!viewer || !ready || props.motionActive) return;
     const overlay = new Group();
     const boxes = [
       ...props.highlights.ids.map((id) => ({
@@ -379,6 +403,7 @@ export function Viewport(props: Props) {
     viewer.update(true);
     return () => {
       viewer.onAfterRender = null;
+      if (label.current) label.current.style.display = "none";
       overlay.removeFromParent();
       overlay.traverse((object) => {
         if (object instanceof Mesh || object instanceof Line) {
@@ -397,6 +422,7 @@ export function Viewport(props: Props) {
     props.highlights,
     displayedScene,
     props.connectionGuides,
+    props.motionActive,
     props.theme,
     ready,
   ]);
@@ -408,13 +434,14 @@ export function Viewport(props: Props) {
         <span className="live-dot" /> ASSEMBLY VIEW{" "}
         <span className="viewport-separator">/</span> mm
       </div>
-      {props.previewOffsets.size > 0 && (
+      {(props.previewOffsets.size > 0 || props.motionActive) && (
         <button
           className="assembly-preview-badge"
           title="Presentation only. Return to installed pose for measurements and checks."
           onClick={props.onResetPreview}
         >
-          Assembly preview <span>↺</span>
+          {props.motionActive ? "Motion preview" : "Assembly preview"}{" "}
+          <span>↺</span>
         </button>
       )}
       <div className="view-tools" aria-label="Viewport controls">

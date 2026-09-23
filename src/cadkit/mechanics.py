@@ -32,6 +32,8 @@ class Joint:
         interfaces: Related Interface names.
         fastenings: Related Fastening names.
         description: Human-readable intent.
+        parent_components: Components on the parent datum side.
+        child_components: Components on the child datum side, including nested leaves.
 
     Stable Joint metadata does not move geometry. For pose-driven placement,
     use declarative Assembly connections.
@@ -46,6 +48,8 @@ class Joint:
     interfaces: tuple[str, ...] = ()
     fastenings: tuple[str, ...] = ()
     description: str = ""
+    parent_components: tuple[str, ...] = ()
+    child_components: tuple[str, ...] = ()
 
     def __post_init__(self):
         _entity(self.name, self.components)
@@ -63,7 +67,8 @@ class Joint:
                 "components": self.components, "description": self.description,
                 "origin": self.origin, "axis": self.axis, "limits": self.limits,
                 "position": self.position, "position_unit": "deg" if self.kind == "revolute" else "mm",
-                "interfaces": self.interfaces, "fastenings": self.fastenings}
+                "interfaces": self.interfaces, "fastenings": self.fastenings,
+                "parent_components": self.parent_components, "child_components": self.child_components}
 
 
 @dataclass(frozen=True)

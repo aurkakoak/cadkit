@@ -51,6 +51,7 @@ own groups when their containing instance has no group override.
         - name_pose
         - pose
         - locations
+        - motion_graph
         - components
         - models
         - fastenings
@@ -174,3 +175,22 @@ resolve in the selected pose.
 `locations()` returns immediate-instance transforms. Use `locations(names="path")`
 for scoped leaf transforms without building geometry, and `models(names="path")`
 when a check needs the corresponding installed shapes.
+
+## Viewer motion
+
+`Assembly.motion_graph()` exports a geometry-free transform graph for the selected
+pose. Matrices are column-major in millimetres. Nodes contain a constant matrix,
+a scalar joint transform, an ordered matrix product, or an inverse; every reference
+points to an earlier node. Component targets identify their world-transform node
+and inverse captured transform. Multiply those together to obtain the display
+transform for already-installed meshes. Couplings derive driven coordinates before
+node evaluation; joint limits apply to every resolved coordinate.
+
+Compiled joint metadata identifies `parent_components` and `child_components`.
+The parent is stationary **relative to that joint**, but may move with an upstream
+joint. Desktop mechanical descriptions also include each joint's
+`moving_components`, including attached descendants and generated hardware.
+
+The graph is a placement preview, not a dynamics or collision solver. Joints with
+additional fastening constraints that cannot be represented by the placement graph
+are disabled in the viewer. Author a pose in Python to validate those arrangements.

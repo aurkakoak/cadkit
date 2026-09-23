@@ -783,6 +783,15 @@ class Assembly:
         """
         return self._resolve(at=at, pose=pose).fastenings()
 
+    def motion_graph(self, *, at=Frame(), pose=None):
+        """Describe geometry-free viewer transforms for an immutable pose.
+
+        The graph contains column-major millimetre matrices, scalar joints,
+        couplings and component targets. It never builds or changes part geometry.
+        """
+        from .kinematics import motion_graph
+        return motion_graph(self._resolve(at=at, pose=pose))
+
     def joints(self, *, at=Frame(), pose=None):
         """Resolve installed joints from this graph and its selected pose.
 
@@ -1056,6 +1065,9 @@ class AssemblyPose:
     def joints(self, **options):
         return self._call("joints", **options)
 
+    def motion_graph(self, **options):
+        return self._call("motion_graph", **options)
+
     def fastenings(self, **options):
         return self._call("fastenings", **options)
 
@@ -1137,12 +1149,16 @@ class Resolution:
                 if isinstance(connection, Connection):
                     refs = tuple(dict.fromkeys((*refs, *(ref for middle in connection.via for ref in self._refs(prefix, middle.instance)))))
                     result.append(Joint(_path(prefix, name), refs, origin=frame.origin, axis=frame.z,
-                                        fastenings=(_path(prefix, connection.fastening_name),)))
+                                        fastenings=(_path(prefix, connection.fastening_name),),
+                                        parent_components=self._refs(prefix, connection.parent.instance),
+                                        child_components=self._refs(prefix, connection.child.instance)))
                 else:
                     result.append(Joint(_path(prefix, name), refs, kind=connection.motion.kind,
                                         origin=frame.origin, axis=frame.z,
                                         limits=getattr(connection.motion, "limits", None),
-                                        position=self.positions.get(_path(prefix, name), 0), description=connection.description))
+                                        position=self.positions.get(_path(prefix, name), 0), description=connection.description,
+                                        parent_components=self._refs(prefix, connection.parent.instance),
+                                        child_components=self._refs(prefix, connection.child.instance)))
         return tuple(result)
 
     def interfaces(self):
@@ -1205,6 +1221,7 @@ class Resolution:
         return result
 
     def as_assembly(self, *, include_hardware=True, kind=None):
+        from .kinematics import motion_graph
         components = self._native_components(kind=kind)
         def visit(assembly, prefix):
             children = []
@@ -1221,11 +1238,12 @@ class Resolution:
         fastenings, joints, interfaces = self.fastenings(), self.joints(), self.interfaces()
         hardware = hardware_assembly(fastenings) if include_hardware else None
         return _ResolvedAssembly(tree.name, tree.children + ((hardware,) if hardware else ()), tree.description,
-                                 joints, interfaces, fastenings)
+                                 motion_graph(self), joints, interfaces, fastenings)
 
 
 @dataclass(frozen=True)
 class _ResolvedAssembly(PlacedAssembly):
+    _motion: dict = field(default_factory=dict, repr=False, compare=False)
     _joints: tuple = field(default=(), repr=False, compare=False)
     _interfaces: tuple = field(default=(), repr=False, compare=False)
     _fastenings: tuple = field(default=(), repr=False, compare=False)
@@ -1328,7 +1346,25 @@ class Project(ProjectRecord):
 
     def mechanical_descriptions(self, assembly=None):
         from ..mechanics import mechanical_descriptions
-        return mechanical_descriptions(self._mechanics(assembly), assembly)
+        result = mechanical_descriptions(self._mechanics(assembly), assembly)
+        if isinstance(assembly, _ResolvedAssembly):
+            from copy import deepcopy
+            from ..mechanics import component_index
+            graph = deepcopy(assembly._motion)
+            index = component_index(assembly)
+            graph["targets"] = {key: value for key, value in graph["targets"].items() if key in index}
+            for key, component in index.items():
+                target = graph["hardware"].get(component.metadata.get("fastening_id"))
+                if target:
+                    graph["targets"][key] = target
+            for joint in graph["joints"]:
+                joint["moving_components"] = [key for key, target in graph["targets"].items()
+                                                if joint["id"] in target["joints"]]
+            for joint in result["joints"]:
+                joint["moving_components"] = next((j["moving_components"] for j in graph["joints"]
+                                                    if j["id"] == joint["id"]), [])
+            result["motion"] = graph
+        return result
 
     def validate_mechanics(self, assembly=None, *, scan_collisions=True, tolerance_mm3=1e-5):
         from ..mechanics import validate_mechanics
@@ -1382,7 +1418,9 @@ class Embedding:
 
     def joints(self):
         refs = self._reference_map()
-        return tuple(replace(item, components=tuple(refs[ref] for ref in item.components)) for item in self._resolve().joints())
+        return tuple(replace(item, components=tuple(refs[ref] for ref in item.components),
+                             parent_components=tuple(refs[ref] for ref in item.parent_components),
+                             child_components=tuple(refs[ref] for ref in item.child_components)) for item in self._resolve().joints())
 
     def interfaces(self, *, hardware_root=None):
         refs = self._reference_map()

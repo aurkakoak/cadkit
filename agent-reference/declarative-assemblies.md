@@ -155,3 +155,16 @@ poses and visibility. `extra_parts=(COUPON,)` adds uninstalled definitions;
 `quantities={"bracket": 6}` selects an explicit manufacturing total. Definition
 groups control manufacturing folders; instance groups control display and
 inherit manufactured Part groups when omitted.
+
+## Desktop motion preview
+
+The inspector's **Motion** controls adjust revolute angles and play independent
+joints at signed rpm. Coupled joints follow their drivers; playback stops at limits.
+The framework supplies `Assembly.motion_graph()` and directed parent/child metadata,
+so clients do not infer moving parts from names or edit geometry. Its column-major
+millimetre matrices transform installed display meshes; nested descendants and
+receiver-owned hardware follow the graph. No Part builders run during playback.
+
+Preview is transient and resets on rebuild. Measurements and Blender rendering
+require reset; running checks restores the installed pose. Extra fastening
+constraints can disable preview. Motion playback is not physical validation.

@@ -54,6 +54,9 @@ export const relatedConnections = (mechanics: Mechanics, ids: string[]) =>
 export const connectionIds = (connection: Connection) => [
   ...new Set([
     ...connection.component_ids,
+    ...("moving_components" in connection
+      ? (connection.moving_components ?? [])
+      : []),
     ...("hardware_ids" in connection ? connection.hardware_ids : []),
   ]),
 ];

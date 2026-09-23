@@ -229,7 +229,7 @@ export function RenderPanel({
           </button>
           {!ready && (
             <small>
-              Wait for the current build and restore installed hardware.
+              Return to the installed pose and wait for the current build.
             </small>
           )}
           {error && <p role="alert">{error}</p>}

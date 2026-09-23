@@ -94,6 +94,9 @@ in source definitions.
 Use `name_pose("service", {...})` to supply named views to CLI
 `--view service`. The desktop shows the Project's selected pose and has no
 named-view selector; `assembly.pose(...).as_project()` selects a pose explicitly.
+The inspector's Motion controls preview revolute joints without changing the
+Project. They expose signed rpm, limits and coupling-aware playback; reset before
+measuring or rendering. Never rewrite Parts just to animate a viewer.
 Geometry, graph hardware and interfaces resolve from that pose. Visibility and
 explosion never alter manufacturing quantities.
 

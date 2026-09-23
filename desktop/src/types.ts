@@ -267,6 +267,9 @@ export interface ConnectionBase {
   resolution_error?: string;
 }
 export interface Joint extends ConnectionBase {
+  moving_components?: string[];
+  parent_components?: string[];
+  child_components?: string[];
   kind: "rigid" | "revolute" | "slider";
   origin: Vector;
   axis: Vector;
@@ -316,6 +319,7 @@ export interface HardwareBomItem {
   [key: string]: unknown;
 }
 export interface Mechanics {
+  motion?: import("./motion").MotionGraph;
   joints: Joint[];
   interfaces: Interface[];
   fastenings: Fastening[];
