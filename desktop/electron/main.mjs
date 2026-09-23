@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
 import { startBridge } from "./local-bridge.mjs";
 import { validateCommand } from "./control-schema.mjs";
+import { Renderer } from "./renderer.mjs";
 import { Slicer } from "./slicer.mjs";
 import { argument, resolveRuntime } from "./runtime.mjs";
 import {
@@ -464,6 +465,7 @@ async function stopSession(session = active) {
   session.current?.close();
   session.candidate?.close();
   session.slicer?.close();
+  session.renderer?.close();
   const stopped = await Promise.allSettled([
     session.watcher?.close(),
     session.bridge?.close(),
@@ -583,6 +585,21 @@ async function activate(value) {
           validation_override,
         });
         checkRevision(session, revision);
+        return result;
+      },
+    });
+    session.renderer = new Renderer({
+      userData: app.getPath("userData"),
+      projectDir: runtime.projectDir,
+      python: runtime.python,
+      env: { ...runtime.workerEnv },
+      publish: (event) => publish(session, event),
+      exportAssets: async (params) => {
+        checkRevision(session, params.revision);
+        if (session.status.phase !== "ready")
+          throw new Error("Wait for the current build");
+        const result = await session.current.call("render_assets", params);
+        checkRevision(session, params.revision);
         return result;
       },
     });
@@ -978,4 +995,38 @@ app.on("window-all-closed", () => app.quit());
 app.on("before-quit", () => {
   void stopSession().catch(() => {});
   rejectControls("CadKit closed");
+});
+
+handle("cadkit:render-action", async (action, params = {}) => {
+  const session = requireSession();
+  const renderer = session.renderer;
+  if (action === "settings") return renderer.settings();
+  if (action === "pick") {
+    const selected = await dialog.showOpenDialog(window, {
+      properties: ["openFile"],
+    });
+    assertSession(session);
+    return selected.canceled
+      ? renderer.settings()
+      : renderer.save(selected.filePaths[0]);
+  }
+  if (action === "start") {
+    checkRevision(session, params.revision);
+    return renderer.start(params);
+  }
+  if (action === "list") return renderer.list();
+  if (action === "cancel")
+    return renderer.cancel(checkedString(params.id, "render ID"));
+  if (action === "preview")
+    return renderer.preview(checkedString(params.id, "render ID"));
+  if (action === "folder")
+    return shell.openPath(
+      renderer.list(checkedString(params.id, "render ID")).directory,
+    );
+  if (action === "open") {
+    const job = renderer.list(checkedString(params.id, "render ID"));
+    if (job.phase !== "complete") throw new Error("Render is not complete");
+    return shell.openPath(job.output);
+  }
+  throw new Error("Unknown render action");
 });

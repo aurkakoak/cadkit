@@ -102,3 +102,21 @@ def test_batch_export_for_slicing_checks_revision_and_print_pose(tmp_path):
     info = result["manifest"]["parts"][0]["bounds_mm"]
     assert info["min"][2] == pytest.approx(0)
     assert info["size"] == pytest.approx([10, 30, 20])
+
+
+@pytest.mark.parametrize("mesh_second", [False, True])
+def test_render_exports_captured_installed_selection(tmp_path, mesh_second, monkeypatch):
+    session = Session(fixture_project(mesh_second))
+    scene = session.scene()
+    monkeypatch.setattr(type(session.project), "get_assembly", lambda _: pytest.fail("rebuilt"))
+    result = session.render_assets(scene["revision"], ["/fixture/right/other"], tmp_path)
+    assert len(result["components"]) == 1
+    item = result["components"][0]
+    assert item["name"] == "other"
+    assert item["geometry"] == ("mesh" if mesh_second else "brep")
+    import trimesh
+    assert trimesh.load_mesh(tmp_path / item["file"]).bounds[0, 0] == pytest.approx(10)
+    with pytest.raises(ValueError, match="Stale"):
+        session.render_assets("old", ["/fixture/right/other"], tmp_path)
+    with pytest.raises(ValueError, match="no explosion"):
+        session.render_assets(scene["revision"], ["/fixture/right/other"], tmp_path, animation=True)

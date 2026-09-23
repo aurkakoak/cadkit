@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld("cadkit", {
   exportPart: (name, validation_override) =>
     ipcRenderer.invoke("cadkit:export", name, validation_override),
   openLink: (url) => ipcRenderer.invoke("cadkit:open-link", url),
+  renderAction: (action, params) =>
+    ipcRenderer.invoke("cadkit:render-action", action, params),
   slicerSettings: () => ipcRenderer.invoke("cadkit:slicer-settings"),
   saveSlicer: (values) => ipcRenderer.invoke("cadkit:slicer-save", values),
   pickSlicerFile: (key) => ipcRenderer.invoke("cadkit:slicer-pick", key),

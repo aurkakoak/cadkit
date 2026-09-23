@@ -82,7 +82,7 @@ an environment:
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.1"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.2"
 ```
 
 Add your `project.py`, then check that CadKit can load it:

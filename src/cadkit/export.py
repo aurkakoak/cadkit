@@ -257,9 +257,15 @@ def export_render_assets(components, directory, *, exploded=False):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     items = []
-    for c in components:
+    used_files = set()
+    for index, c in enumerate(components):
         model = shape(c.model)
         filename = f"{c.name}.stl"
+        if not c.name or any(ch in c.name for ch in '/\\:*?"<>|') or filename.casefold() in used_files:
+            filename = f"component-{index:04d}.stl"
+        while filename.casefold() in used_files:
+            filename = "_" + filename
+        used_files.add(filename.casefold())
         export_stl(model, directory / filename)
         items.append(
             {

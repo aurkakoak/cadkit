@@ -80,3 +80,15 @@ def test_render_manifest_uses_installed_coordinates_and_explosion(tmp_path):
     assert trimesh.load_mesh(tmp_path / "installed.stl").bounds[0, 2] == pytest.approx(
         50
     )
+
+
+def test_render_assets_keep_duplicate_names_and_paths_inside_output(tmp_path):
+    from cadkit.export import export_render_assets
+    from cadkit._project import Component
+
+    solid = cq.Workplane("XY").box(1, 1, 1).val()
+    components = [Component(name, solid, "test") for name in ("block", "block", "../escape")]
+    manifest = export_render_assets(components, tmp_path)
+    files = [item["file"] for item in manifest["components"]]
+    assert len(set(files)) == 3
+    assert all((tmp_path / file).is_file() and (tmp_path / file).parent == tmp_path for file in files)

@@ -120,6 +120,9 @@ def main(argv=None, *, project=None):
     blender.add_argument("--animation", action="store_true")
     blender.add_argument("--blender", default="blender")
     blender.add_argument("--samples", type=int, default=64)
+    blender.add_argument("--width", type=int, default=1200)
+    blender.add_argument("--height", type=int, default=1200)
+    blender.add_argument("--camera", choices=("Overview", "Front", "Rear"), default="Overview")
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
@@ -173,6 +176,9 @@ def main(argv=None, *, project=None):
                 str(args.output.resolve()),
                 "--samples",
                 str(args.samples),
+                "--width", str(args.width),
+                "--height", str(args.height),
+                "--camera", args.camera,
             ]
             if args.render:
                 command += ["--render", str(args.render.resolve())]

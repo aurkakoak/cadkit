@@ -1,3 +1,13 @@
+export interface RenderJob {
+  id: string;
+  directory: string;
+  output: string;
+  revision: string;
+  mode: "image" | "animation" | "scene";
+  phase: "exporting" | "running" | "complete" | "failed" | "cancelled";
+  message: string;
+  log: string;
+}
 import type { Shapes } from "three-cad-viewer";
 export type Theme = "dark" | "light";
 export type Vector = [number, number, number];
@@ -177,6 +187,7 @@ export interface LauncherState {
 export type AppEvent =
   | ({ type: "status"; sessionId?: string } & Status)
   | { type: "scene"; scene: Snapshot; sessionId?: string }
+  | { type: "render"; job: RenderJob; sessionId?: string }
   | { type: "slice"; job: SliceJob; sessionId?: string }
   | { type: "launcher"; state: LauncherState }
   | { type: "open-project"; choice?: ProjectChoice };
@@ -222,6 +233,7 @@ declare global {
         scan_collisions?: boolean;
       }): Promise<MechanicalReport>;
       openLink(url: string): Promise<void>;
+      renderAction(action: string, params?: object): Promise<any>;
       slicerSettings(): Promise<SlicerSettings>;
       saveSlicer(
         values: Pick<SlicerSettings, "kind" | "price" | "currency" | "bed">,

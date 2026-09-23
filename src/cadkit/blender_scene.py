@@ -42,9 +42,14 @@ def main(argv=None):
     parser.add_argument("--render", type=Path)
     parser.add_argument("--animation", action="store_true")
     parser.add_argument("--samples", type=int, default=64)
+    parser.add_argument("--width", type=int, default=1200)
+    parser.add_argument("--height", type=int, default=1200)
+    parser.add_argument("--camera", choices=("Overview", "Front", "Rear"), default="Overview")
     args = parser.parse_args(
         argv if argv is not None else sys.argv[sys.argv.index("--") + 1 :]
     )
+    if not (1 <= args.samples <= 4096 and 16 <= args.width <= 8192 and 16 <= args.height <= 8192):
+        parser.error("Samples must be 1–4096; dimensions must be 16–8192")
     spec = json.loads(args.manifest.read_text())
     if spec.get("schema_version") != 1 or spec.get("units") != "mm":
         raise ValueError("Expected CadKit scene schema 1 in millimetres")
@@ -56,8 +61,8 @@ def main(argv=None):
     scene.render.engine = "CYCLES"
     scene.cycles.samples = args.samples
     scene.cycles.use_denoising = True
-    scene.render.resolution_x = 1200
-    scene.render.resolution_y = 1200
+    scene.render.resolution_x = args.width
+    scene.render.resolution_y = args.height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.fps = 30
@@ -161,10 +166,10 @@ def main(argv=None):
         camera.location = center + Vector(direction) * span
         look_at(camera, center)
         data.type = "ORTHO"
-        data.ortho_scale = span * 1.65
+        data.ortho_scale = span * 1.65 * max(args.width / args.height, args.height / args.width)
         data.clip_start = 0.001
         data.clip_end = 100
-        if name == "Overview":
+        if name == args.camera:
             scene.camera = camera
     args.output.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output.resolve()))

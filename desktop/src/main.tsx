@@ -14,6 +14,7 @@ import {
   Boxes,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleHelp,
   Download,
@@ -42,6 +43,7 @@ import {
 } from "lucide-react";
 import "three-cad-viewer/css";
 import "./style.css";
+import { RenderPanel } from "./RenderPanel";
 import { SlicerPanel } from "./SlicerPanel";
 import { HomeScreen, ProjectOpener } from "./HomeScreen";
 import {
@@ -242,6 +244,15 @@ function ProjectWorkbench({
   } | null>(null);
   const mechanics = scene?.mechanics ?? emptyMechanics;
   const connection = findConnection(mechanics, selectedConnection);
+  const [inspectorOpen, setInspectorOpen] = useState(
+    () => localStorage.getItem("cadkit.inspector") !== "closed",
+  );
+  const toggleInspector = () => {
+    setInspectorOpen((open) => {
+      localStorage.setItem("cadkit.inspector", open ? "closed" : "open");
+      return !open;
+    });
+  };
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string[]>([]);
   const selectedHardwareIds =
@@ -287,6 +298,7 @@ function ProjectWorkbench({
     ids: [] as string[],
     color: "#f1c789",
   });
+  const [renderOpen, setRenderOpen] = useState(false);
   const [printParts, setPrintParts] = useState<string[] | null>(null);
   const viewportApi = useRef<ViewportApi | null>(null);
   const forcedMeasurement = useRef<Measurement | null>(null);
@@ -1063,6 +1075,15 @@ function ProjectWorkbench({
           </button>
           <button
             className="icon-button"
+            title="Render"
+            aria-label="Render"
+            disabled={!scene}
+            onClick={() => setRenderOpen(true)}
+          >
+            <Image size={17} />
+          </button>
+          <button
+            className="icon-button"
             title="Print"
             aria-label="Print"
             disabled={!scene}
@@ -1097,7 +1118,9 @@ function ProjectWorkbench({
           </button>
         </div>
       </header>
-      <div className="workspace">
+      <div
+        className={`workspace${inspectorOpen ? "" : " inspector-collapsed"}`}
+      >
         <aside className="navigator">
           <div className="panel-heading">
             <span>PROJECT</span>
@@ -1226,6 +1249,22 @@ function ProjectWorkbench({
           </div>
         </aside>
         <main className="canvas-panel">
+          <button
+            className="inspector-toggle"
+            aria-label={
+              inspectorOpen ? "Collapse inspector" : "Expand inspector"
+            }
+            title={inspectorOpen ? "Collapse inspector" : "Expand inspector"}
+            aria-expanded={inspectorOpen}
+            aria-controls="inspector-panel"
+            onClick={toggleInspector}
+          >
+            {inspectorOpen ? (
+              <ChevronRight size={16} />
+            ) : (
+              <ChevronLeft size={16} />
+            )}
+          </button>
           {scene ? (
             <Suspense
               fallback={
@@ -1306,7 +1345,11 @@ function ProjectWorkbench({
             </div>
           )}
         </main>
-        <aside className="inspector">
+        <aside
+          id="inspector-panel"
+          className="inspector"
+          hidden={!inspectorOpen}
+        >
           <div className="panel-heading">
             <span>INSPECTOR</span>
             {chosen && (
@@ -1696,6 +1739,18 @@ function ProjectWorkbench({
             setExportReview(null);
             void doExport(name, reason);
           }}
+        />
+      )}
+      {scene && renderOpen && (
+        <RenderPanel
+          scene={scene}
+          sessionId={active.sessionId}
+          visible={scene.components
+            .filter((c) => !hidden.has(c.id))
+            .map((c) => c.id)}
+          selected={selected}
+          ready={status.phase === "ready" && !previewActive}
+          onClose={() => setRenderOpen(false)}
         />
       )}
       {scene && printParts && (

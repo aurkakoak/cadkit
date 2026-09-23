@@ -21,7 +21,7 @@ import numpy as np
 from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 
 from .cli import load_project
-from .export import build
+from .export import build, export_render_assets
 from .geometry import Mesh, mesh, shape
 from ._project import Assembly
 from .preflight import scoped_report
@@ -49,6 +49,7 @@ class Session:
         self.notify = notify
         self.revision = str(uuid4())
         self.models = {}
+        self.components = {}
         self.metadata = {}
         self.snapshot = None
         self.assembly = None
@@ -96,6 +97,7 @@ class Session:
             if node.part is not None and node.part not in parts:
                 raise ValueError(f"{node.name}: unknown Part {node.part!r}")
             self.models[path] = model
+            self.components[path] = node
             color = "#" + "".join(f"{round(v * 255):02x}" for v in node.color)
             if isinstance(model, Mesh):
                 triangles = model.triangles()
@@ -255,6 +257,16 @@ class Session:
         manifest = build(self.project, [part], destination, mechanical_report=report, validation_override=validation_override)
         return {"directory": str(destination), "manifest": manifest}
 
+    def render_assets(self, revision, ids, output_dir, exploded=False, animation=False):
+        if revision != self.revision:
+            raise ValueError("Stale build revision")
+        if not ids or len(set(ids)) != len(ids) or any(i not in self.components for i in ids):
+            raise ValueError("Select current assembly components")
+        components = [self.components[i] for i in ids]
+        if animation and not any(any(c.explode) for c in components):
+            raise ValueError("Selected components have no explosion offsets")
+        return export_render_assets(components, output_dir, exploded=exploded)
+
     def export_parts(self, revision, names, output_dir, validation_override=None):
         if revision != self.revision:
             raise ValueError("This request belongs to an older build")
@@ -292,7 +304,7 @@ def main():
             try:
                 request = json.loads(line)
                 method = request["method"]
-                if method not in {"scene", "measure", "export_part", "export_parts", "mechanical_report"}:
+                if method not in {"scene", "measure", "export_part", "export_parts", "mechanical_report", "render_assets"}:
                     raise ValueError(f"Unknown method: {method}")
                 result = getattr(session, method)(**request.get("params", {}))
                 emit({"id": request["id"], "result": result})

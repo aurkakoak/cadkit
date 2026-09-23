@@ -2,7 +2,7 @@
 
 These are complete snapshots of the [tutorial](../../docs/tutorials/index.md).
 Each file is independent: copy one to `enclosure.py` in your own project to
-start at that chapter. The tutorial uses CadKit 0.5.1 with Python 3.12.
+start at that chapter. The tutorial uses CadKit 0.5.2 with Python 3.12.
 
 | Section | Snapshot | Run after copying to `enclosure.py` |
 | --- | --- | --- |

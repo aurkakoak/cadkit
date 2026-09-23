@@ -61,7 +61,7 @@ hardware. It does not add uninstalled coupons or change manufacturing quantities
 | `assembly` | `--output build/assembly/full-machine.step` | Installed native STEP plus a JSON manifest listing omitted meshes |
 | `preview` | `--screenshot FILE`; `--no-interact` | CQ viewer, optionally a saved image |
 | `render-assets` | `--output-dir render/exports` | Component STL files and `scene.json` for Blender |
-| `blender` | `--assets render/exports/scene.json`; `--output render/project.blend`; `--render IMAGE`; `--animation`; `--blender blender`; `--samples 64` | Background Blender scene build and optional rendering |
+| `blender` | `--assets render/exports/scene.json`; `--output render/project.blend`; `--render IMAGE`; `--animation`; `--blender blender`; `--samples 64`; `--width 1200`; `--height 1200`; `--camera Overview` (`Front`, `Rear`) | Background Blender scene build and optional rendering |
 
 `blender` reads an existing render manifest. It does not accept the three
 assembly-view flags; generate the intended assets with `render-assets` first.

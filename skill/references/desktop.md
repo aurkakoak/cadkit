@@ -113,7 +113,13 @@ Opening a project executes its Python builders, just like the CadKit CLI.
   revision-scoped and recalculated after a successful rebuild.
 
 Measurements use whole objects; face/edge/axis selection is not available.
-Blender continues through the CadKit CLI.
+The **Render** panel uses the shared Blender pipeline for PNG images, explosion
+animations and editable `.blend` scenes. It exports the current installed geometry,
+including meshes, without rebuilding the project. Select visible, all or selected
+components, a studio camera, resolution and samples. Jobs have previews, logs,
+cancellation and output-folder access. Blender is installed separately; animations
+also require FFmpeg. Output is retained in `build/desktop-renders/`; closing or
+switching projects cancels active jobs.
 
 ## Mechanical connections
 

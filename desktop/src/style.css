@@ -266,7 +266,11 @@ p {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 290px;
+  --navigator-width: 280px;
+  --inspector-width: 290px;
+  grid-template-columns: var(--navigator-width) minmax(0, 1fr) var(
+      --inspector-width
+    );
   min-height: 0;
 }
 .navigator,
@@ -1663,7 +1667,8 @@ dd {
 }
 @media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: 245px minmax(0, 1fr) 265px;
+    --navigator-width: 245px;
+    --inspector-width: 265px;
   }
   .watch-label,
   .project-badge {
@@ -2181,7 +2186,8 @@ dd {
     display: inline;
   }
   .workspace {
-    grid-template-columns: 310px minmax(0, 1fr) 310px;
+    --navigator-width: 310px;
+    --inspector-width: 310px;
   }
 }
 .hardware-bom details {
@@ -2216,4 +2222,43 @@ dd {
   flex-shrink: 0;
   color: var(--warning);
   padding: 3px;
+}
+
+.workspace.inspector-collapsed {
+  grid-template-columns: var(--navigator-width) minmax(0, 1fr);
+}
+.inspector[hidden] {
+  display: none;
+}
+.inspector-toggle {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.inspector-toggle[aria-expanded="true"] {
+  transform: translate(50%, -50%);
+  border-right: 1px solid var(--line);
+  border-radius: 8px;
+}
+.inspector-toggle:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.inspector-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }

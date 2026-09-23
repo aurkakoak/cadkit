@@ -1,5 +1,25 @@
 # Render a project with Blender
 
+## Desktop
+
+Open a project and choose **Render** in the toolbar. Choose **Image**, **Explosion
+animation** or **Blender scene**, then select the parts, camera, image size and
+sample count. **Visible** includes the currently visible components; **Selection**
+includes selected components. Cameras are studio presets, independent of the viewport.
+
+Blender must be installed separately. CadKit uses Blender on `PATH` or in a common
+installation location; choose the **Blender** button to locate its executable.
+Animations also require FFmpeg on `PATH` and declared explosion offsets. They show
+an explosion sequence, not joint motion.
+
+**Render** uses the current built geometry. Image previews appear in the panel;
+**Open** opens the result and **Folder** opens its files. Every job keeps an editable
+`scene.blend`, assets and a log under `build/desktop-renders/`. Results stay listed
+while the project is open. Closing the panel allows rendering to continue;
+**Cancel**, closing the project or quitting the app stops it.
+
+## CLI
+
 You need an importable CadKit project, its Python environment and a separate
 Blender installation. Run these commands from the project directory. Geometry
 remains authored in Python; Blender receives a presentation scene.
@@ -25,6 +45,7 @@ uv run cadkit blender \
 ```
 
 If Blender is not on `PATH`, add `--blender /absolute/path/to/blender`. Use
+`--width 800 --height 600 --camera Front` to change the image and camera. Use
 `--samples 8` for a quick preview before a longer render. The Blender command
 does not take `--project`; it consumes the exported scene manifest.
 
