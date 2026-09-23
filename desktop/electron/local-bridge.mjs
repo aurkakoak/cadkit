@@ -3,14 +3,14 @@
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { projectIdentity } from "./projects.mjs";
 import {
   mkdir,
   lstat,
   readFile,
   writeFile,
   unlink,
-  realpath,
   chmod,
 } from "node:fs/promises";
 
@@ -29,10 +29,7 @@ export async function connectionFile(projectDir, reference) {
     throw new Error(
       "CadKit IPC directory must be owned by this user with permissions 0700",
     );
-  const key = createHash("sha256")
-    .update(`${await realpath(projectDir)}\0${reference}`)
-    .digest("hex")
-    .slice(0, 24);
+  const key = await projectIdentity({ projectDir, reference });
   return path.join(root, `${key}.json`);
 }
 
@@ -83,7 +80,7 @@ export async function startBridge(projectDir, reference, execute) {
   const token = randomBytes(32).toString("hex");
   const socketPath =
     process.platform === "win32"
-      ? `\\\\.\\pipe\\cadkit-${randomBytes(16).toString("hex")}`
+      ? `\\\\.\\pipe\\cadkit-${path.basename(file, ".json")}`
       : file.replace(/\.json$/, ".sock");
   // Never unlink a live app's socket. Stale discovery is only removed after
   // an OS-level connection refusal, not after an application error or timeout.
@@ -136,15 +133,20 @@ export async function startBridge(projectDir, reference, execute) {
     server.once("error", reject);
     server.listen(socketPath, resolve);
   });
-  if (process.platform !== "win32") await chmod(socketPath, 0o600);
-  await unlink(file).catch((e) => {
-    if (e.code !== "ENOENT") throw e;
-  });
-  await writeFile(
-    file,
-    JSON.stringify({ socket: socketPath, token, pid: process.pid }),
-    { mode: 0o600, flag: "wx" },
-  );
+  try {
+    if (process.platform !== "win32") await chmod(socketPath, 0o600);
+    await unlink(file).catch((e) => {
+      if (e.code !== "ENOENT") throw e;
+    });
+    await writeFile(
+      file,
+      JSON.stringify({ socket: socketPath, token, pid: process.pid }),
+      { mode: 0o600, flag: "wx" },
+    );
+  } catch (error) {
+    await new Promise((resolve) => server.close(resolve));
+    throw error;
+  }
   return {
     file,
     async close() {

@@ -49,9 +49,14 @@ whose interpreter points back to the CI machine. Electron includes this
 runtime outside its application archive. Users can still choose a project
 environment with `--python` for extra project dependencies.
 
-The packaged app opens a writable copy of the example on its first launch.
-Its MCP configuration uses the app executable with `--mcp`, so users do not
-need to install Node separately.
+Packaging checks the bundled platform, architecture and CadKit version against
+the desktop build. If they differ, run `npm run bundle:python` before packaging.
+
+The packaged app opens Projects when launched without a project. Users choose an
+existing folder or create a writable starter or bracket example. The packaged
+smoke test explicitly opens a bracket copy to verify the worker and renderer.
+MCP configuration uses the app executable with `--mcp`, so users do not need to
+install Node separately.
 
 Run the packaged smoke check before distributing:
 
@@ -72,8 +77,8 @@ npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
 4. Push a tag matching the version:
 
    ```sh
-   git tag v0.5.0
-   git push origin main v0.5.0
+   git tag v0.5.1
+   git push origin main v0.5.1
    ```
 
 The Release workflow tests the code, builds all four native targets, launches
@@ -129,7 +134,7 @@ To select a specific macOS version or location:
 
 ```sh
 curl -fsSL https://aurkakoak.github.io/cadkit/install.sh | \
-  CADKIT_VERSION=0.5.0 CADKIT_INSTALL_DIR="$HOME/Applications" sh
+  CADKIT_VERSION=0.5.1 CADKIT_INSTALL_DIR="$HOME/Applications" sh
 ```
 
 The script requires a published release; a draft or Actions artifact is not

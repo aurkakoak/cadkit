@@ -1,5 +1,6 @@
 import { constants, copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { normalizeReference } from "./projects.mjs";
 
 export function argument(argv, name, fallback) {
   const index = argv.indexOf(name);
@@ -29,17 +30,23 @@ export function resolveRuntime({
 }) {
   const explicitDirectory = argument(argv, "--project-dir");
   const explicitReference = argument(argv, "--project");
-  const useExample = isPackaged && !explicitDirectory && !explicitReference;
+  const useExample =
+    argv.includes("--smoke-test") && !explicitDirectory && !explicitReference;
+  if (!explicitDirectory && !explicitReference && !useExample) return null;
   const projectDir = path.resolve(
     explicitDirectory ??
       (useExample ? path.join(userData, "projects", "bracket") : cwd),
   );
   if (useExample) {
     mkdirSync(projectDir, { recursive: true });
-    // First launch creates an editable project. Upgrades never replace user work.
+    // Smoke tests use a real editable project without replacing previous work.
     try {
       copyFileSync(
-        path.join(resourcesPath, "examples", "bracket.py"),
+        path.join(
+          isPackaged ? resourcesPath : framework,
+          "examples",
+          "bracket.py",
+        ),
         path.join(projectDir, "project.py"),
         constants.COPYFILE_EXCL,
       );
@@ -87,7 +94,7 @@ export function resolveRuntime({
   }
   return {
     projectDir,
-    reference: explicitReference ?? "project:PROJECT",
+    reference: normalizeReference(explicitReference ?? "project:PROJECT"),
     python,
     workerEnv,
   };

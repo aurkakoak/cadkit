@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import {
@@ -27,18 +35,22 @@ import {
   Nut,
   ShieldCheck,
   AlertTriangle,
+  Home,
+  FolderOpen,
+  Image,
+  Settings2,
 } from "lucide-react";
 import "three-cad-viewer/css";
 import "./style.css";
-import { Viewport } from "./Viewport";
 import { SlicerPanel } from "./SlicerPanel";
+import { HomeScreen, ProjectOpener } from "./HomeScreen";
 import {
   ConnectionIcon,
   ConnectionInspector,
   ConnectionsPanel,
   HardwareControls,
-  ValidationPanel,
 } from "./ConnectionsPanel";
+import { ValidationPanel } from "./ValidationPanel";
 import { MechanicalReview } from "./MechanicalReview";
 import {
   connectionIds,
@@ -67,7 +79,14 @@ import type {
   HardwareView,
   MechanicalFinding,
   MechanicalReport,
+  LauncherState,
+  ProjectChoice,
+  ProjectSession,
 } from "./types";
+
+const Viewport = lazy(() =>
+  import("./Viewport").then((module) => ({ default: module.Viewport })),
+);
 
 const title = (value: string) =>
   value
@@ -92,12 +111,112 @@ function storedTheme(): Theme {
 }
 
 function App() {
+  const [launcher, setLauncher] = useState<LauncherState | null>(null);
+  const [error, setError] = useState("");
+  const [opening, setOpening] = useState<{ choice?: ProjectChoice } | null>(
+    null,
+  );
+  const [theme, setTheme] = useState<Theme>(storedTheme);
+  useEffect(() => {
+    let live = true;
+    let receivedState = false;
+    const off = window.cadkit.onEvent((event) => {
+      if (event.type === "launcher") {
+        receivedState = true;
+        setLauncher(event.state);
+        setError("");
+      }
+      if (event.type === "open-project") setOpening({ choice: event.choice });
+    });
+    window.cadkit
+      .launcherState()
+      .then((state) => {
+        if (live && !receivedState) setLauncher(state);
+      })
+      .catch((failure) => {
+        if (live) setError(String(failure));
+      });
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("cadkit.theme", theme);
+  }, [theme]);
+  const onHome = () => {
+    void window.cadkit
+      .closeProject()
+      .then(setLauncher)
+      .catch((failure) => setError(String(failure)));
+  };
+  const onOpen = (choice?: ProjectChoice) => setOpening({ choice });
+  return (
+    <>
+      {launcher?.active ? (
+        <ProjectWorkbench
+          key={launcher.active.sessionId}
+          active={launcher.active}
+          theme={theme}
+          onTheme={setTheme}
+          onHome={onHome}
+          onOpen={onOpen}
+        />
+      ) : launcher ? (
+        <>
+          <HomeScreen state={launcher} onState={setLauncher} onOpen={onOpen} />
+          <button
+            className="icon-button home-theme-toggle"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </>
+      ) : (
+        <div className="launcher-loading" role="status">
+          Opening CadKit…
+        </div>
+      )}
+      {error && (
+        <div className="launcher-error" role="alert">
+          <span>{error}</span>
+          <button aria-label="Dismiss error" onClick={() => setError("")}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {opening && (
+        <ProjectOpener
+          choice={opening.choice}
+          onState={setLauncher}
+          onClose={() => setOpening(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function ProjectWorkbench({
+  active,
+  theme,
+  onTheme,
+  onHome,
+  onOpen,
+}: {
+  active: ProjectSession;
+  theme: Theme;
+  onTheme: (theme: Theme) => void;
+  onHome: () => void;
+  onOpen: (choice?: ProjectChoice) => void;
+}) {
   const [scene, setScene] = useState<Snapshot | null>(null);
   const [status, setStatus] = useState<Status>({
     phase: "building",
     message: "Starting CadQuery…",
   });
-  const [theme, setTheme] = useState<Theme>(storedTheme);
   const [tab, setTab] = useState<"assembly" | "parts" | "connections">(
     "assembly",
   );
@@ -208,27 +327,42 @@ function App() {
     forcedMeasurement.current = null;
   };
   useEffect(() => {
+    let live = true;
     const off = window.cadkit.onEvent((event) => {
+      if (
+        "sessionId" in event &&
+        event.sessionId &&
+        event.sessionId !== active.sessionId
+      )
+        return;
       if (event.type === "scene") acceptScene(event.scene);
       if (event.type === "status") setStatus(event);
     });
     window.cadkit
       .load()
       .then((result) => {
-        acceptScene(result.scene);
+        if (!live || result.launcher.active?.sessionId !== active.sessionId)
+          return;
+        if (result.scene) acceptScene(result.scene);
         setStatus(result.status);
       })
-      .catch((error) => setStatus({ phase: "error", message: error.message }));
-    return off;
+      .catch((error) => {
+        if (live) setStatus({ phase: "error", message: error.message });
+      });
+    return () => {
+      live = false;
+      off();
+    };
   }, []);
   useEffect(
-    () => window.cadkit.onControl((request) => controlHandler.current(request)),
+    () =>
+      window.cadkit.onControl((request) => {
+        if (request.sessionId && request.sessionId !== active.sessionId)
+          throw new Error("Project session changed. Read get_state again.");
+        return controlHandler.current(request);
+      }),
     [],
   );
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("cadkit.theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     const sequence = ++measureSequence.current;
@@ -301,6 +435,39 @@ function App() {
     void window.cadkit
       .rebuild()
       .catch((error) => setStatus({ phase: "error", message: error.message }));
+  };
+  const projectSettings = () =>
+    onOpen({
+      directory: active.projectDir,
+      entries: [
+        {
+          projectDir: active.projectDir,
+          reference: active.reference,
+          python: active.python,
+          label: scene?.project.name ?? "Current project",
+        },
+      ],
+    });
+  const savePreview = (revision: string, manual = false) => {
+    if (revision !== currentRevision.current || status.phase !== "ready")
+      return;
+    if (
+      !manual &&
+      (selected.length ||
+        hidden.size ||
+        highlights.ids.length ||
+        annotations.length ||
+        previewActive)
+    )
+      return;
+    void window.cadkit
+      .saveProjectPreview({ revision, manual })
+      .then(() => {
+        if (manual) setNotice("Project preview saved");
+      })
+      .catch((failure) => {
+        if (manual) setNotice(String(failure));
+      });
   };
   const toggleCollapsed = (id: string) =>
     setCollapsed((before) => {
@@ -388,11 +555,23 @@ function App() {
       finding.concept !== "assembly" &&
       findConnection(mechanics, { kind: finding.concept, id: finding.entity })
     )
-      selectConnection(finding.concept, finding.entity);
+      selectConnection(finding.concept, finding.entity, false);
     else {
       setSelectedConnection(null);
-      setSelected(finding.component_ids);
       setPartName(null);
+    }
+    setSelected(finding.component_ids);
+    if (
+      scene?.components.some(
+        (component) =>
+          finding.component_ids.includes(component.id) && isHardware(component),
+      )
+    ) {
+      setHardwareView((before) => ({
+        ...before,
+        mode: "selected",
+        previewProgress: 0,
+      }));
     }
   };
 
@@ -806,6 +985,14 @@ function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
+        <button
+          className="icon-button"
+          title="Home"
+          aria-label="Home"
+          onClick={onHome}
+        >
+          <Home size={18} />
+        </button>
         <div className="brand">
           <span className="brand-mark">
             <Boxes size={22} />
@@ -814,8 +1001,49 @@ function App() {
         </div>
         <div className="project-breadcrumb">
           <span>/</span>
-          <Box size={15} />
-          {title(scene?.project.name ?? "Project")}
+          <details className="project-menu">
+            <summary>
+              <Box size={15} />
+              {title(scene?.project.name ?? "Project")}
+              <ChevronDown size={13} />
+            </summary>
+            <div className="project-menu-actions">
+              <button
+                onClick={(event) => {
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+                  onOpen();
+                }}
+              >
+                <FolderOpen size={15} />
+                Open project…
+              </button>
+              <button
+                onClick={(event) => {
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+                  projectSettings();
+                }}
+              >
+                <Settings2 size={15} />
+                Project settings…
+              </button>
+              <button
+                disabled={!scene || status.phase !== "ready"}
+                onClick={(event) => {
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+                  if (scene) savePreview(scene.revision, true);
+                }}
+              >
+                <Image size={15} />
+                Use current view as preview
+              </button>
+            </div>
+          </details>
         </div>
         <div className="header-actions">
           <span className="watch-label" title="Watching source">
@@ -863,7 +1091,7 @@ function App() {
             className="icon-button theme-button"
             aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
             title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={() => onTheme(theme === "dark" ? "light" : "dark")}
           >
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
           </button>
@@ -999,31 +1227,40 @@ function App() {
         </aside>
         <main className="canvas-panel">
           {scene ? (
-            <Viewport
-              scene={scene}
-              theme={theme}
-              hidden={hidden}
-              selected={selected}
-              measurement={previewActive ? null : measurement}
-              previewOffsets={offsets}
-              onResetPreview={resetPreview}
-              connectionGuides={
-                connection && "origin" in connection
-                  ? [{ origin: connection.origin, axis: connection.axis }]
-                  : connection && "sites" in connection
-                    ? connection.sites
-                    : []
+            <Suspense
+              fallback={
+                <div className="loading-scene" role="status">
+                  Opening 3D view…
+                </div>
               }
-              annotations={annotations}
-              highlights={highlights}
-              api={viewportApi}
-              onClearAnnotations={() => setAnnotations([])}
-              onEditAnnotation={setEditingAnnotation}
-              onDeleteAnnotation={deleteNote}
-              onMoveAnnotation={moveNote}
-              onPick={pick}
-              onError={setNotice}
-            />
+            >
+              <Viewport
+                scene={scene}
+                theme={theme}
+                hidden={hidden}
+                selected={selected}
+                measurement={previewActive ? null : measurement}
+                previewOffsets={offsets}
+                onResetPreview={resetPreview}
+                connectionGuides={
+                  connection && "origin" in connection
+                    ? [{ origin: connection.origin, axis: connection.axis }]
+                    : connection && "sites" in connection
+                      ? connection.sites
+                      : []
+                }
+                annotations={annotations}
+                highlights={highlights}
+                api={viewportApi}
+                onClearAnnotations={() => setAnnotations([])}
+                onEditAnnotation={setEditingAnnotation}
+                onDeleteAnnotation={deleteNote}
+                onMoveAnnotation={moveNote}
+                onPick={pick}
+                onError={setNotice}
+                onReady={(revision) => savePreview(revision)}
+              />
+            </Suspense>
           ) : (
             <div className="loading-scene">
               <div className="loading-logo">
@@ -1032,9 +1269,17 @@ function App() {
               <h1>{status.phase === "error" ? "Build failed" : "Building…"}</h1>
               <p>{status.message}</p>
               {status.phase === "error" && (
-                <button className="primary-button" onClick={rebuild}>
-                  Try again
-                </button>
+                <div className="project-recovery-actions">
+                  <button className="primary-button" onClick={rebuild}>
+                    Try again
+                  </button>
+                  <button className="quiet-button" onClick={projectSettings}>
+                    Project settings…
+                  </button>
+                  <button className="quiet-button" onClick={onHome}>
+                    Home
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -1049,6 +1294,7 @@ function App() {
               <strong>Build failed · showing the last successful model</strong>
               <p>{status.message}</p>
               <button onClick={rebuild}>Retry</button>
+              <button onClick={projectSettings}>Project settings…</button>
             </div>
           )}
           {notice && (
@@ -1093,6 +1339,7 @@ function App() {
                 scene={scene}
                 report={mechanicalReport}
                 onPick={pick}
+                onShowFinding={showFinding}
                 onSelect={selectConnection}
                 onFocus={() => {
                   setHardwareView((before) => ({
@@ -1159,12 +1406,18 @@ function App() {
                       <dt>Group</dt>
                       <dd>{title(part.group)}</dd>
                       <dt>Print rotation</dt>
-                      <dd>{part.print_rotation.map((angle) => Number(angle.toFixed(2))).join("°, ")}°</dd>
+                      <dd>
+                        {part.print_rotation
+                          .map((angle) => Number(angle.toFixed(2)))
+                          .join("°, ")}
+                        °
+                      </dd>
                       {part.print_frame && (
                         <>
                           <dt>Print offset</dt>
                           <dd>
-                            X {part.print_frame.origin[0]} mm, Y {part.print_frame.origin[1]} mm
+                            X {part.print_frame.origin[0]} mm, Y{" "}
+                            {part.print_frame.origin[1]} mm
                           </dd>
                         </>
                       )}
@@ -1268,6 +1521,7 @@ function App() {
             {tab === "connections" && (
               <ValidationPanel
                 report={mechanicalReport}
+                scene={scene ?? undefined}
                 busy={validating}
                 error={validationError}
                 onRun={() => void runValidation().catch(() => {})}
@@ -1411,7 +1665,7 @@ function App() {
               {validating
                 ? "Checking…"
                 : mechanicalReport
-                  ? `${mechanicalReport.scope ? "Parts · " : ""}${mechanicalReport.findings.filter((f) => f.status === "fail").length} failed · ${mechanicalReport.findings.filter((f) => f.status === "unverified").length} unverified`
+                  ? `${mechanicalReport.scope ? "Parts · " : ""}${mechanicalReport.findings.filter((f) => f.status === "fail").length} failed · ${mechanicalReport.findings.filter((f) => f.status === "unverified").length} not verified`
                   : "Not checked"}
             </button>
           )}
@@ -1434,6 +1688,7 @@ function App() {
       {exportReview && (
         <MechanicalReview
           report={exportReview.report}
+          scene={scene ?? undefined}
           part={exportReview.part}
           onClose={() => setExportReview(null)}
           onProceed={(reason) => {

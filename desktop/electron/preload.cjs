@@ -1,6 +1,19 @@
 const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("cadkit", {
   load: () => ipcRenderer.invoke("cadkit:load"),
+  launcherState: () => ipcRenderer.invoke("cadkit:launcher-state"),
+  chooseProject: () => ipcRenderer.invoke("cadkit:choose-project"),
+  openProject: (target) => ipcRenderer.invoke("cadkit:open-project", target),
+  closeProject: () => ipcRenderer.invoke("cadkit:close-project"),
+  createProject: (template) =>
+    ipcRenderer.invoke("cadkit:create-project", template),
+  pinProject: (id, pinned) =>
+    ipcRenderer.invoke("cadkit:pin-project", id, pinned),
+  removeProject: (id) => ipcRenderer.invoke("cadkit:remove-project", id),
+  locateProject: (id) => ipcRenderer.invoke("cadkit:locate-project", id),
+  pickProjectPython: () => ipcRenderer.invoke("cadkit:pick-project-python"),
+  saveProjectPreview: (params) =>
+    ipcRenderer.invoke("cadkit:save-project-preview", params),
   rebuild: () => ipcRenderer.invoke("cadkit:rebuild"),
   measure: (params) => ipcRenderer.invoke("cadkit:measure", params),
   mechanicalReport: (params) =>

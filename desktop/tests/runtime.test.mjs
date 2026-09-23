@@ -47,8 +47,20 @@ function fixture(t) {
   };
 }
 
-test("packaged first launch creates editable example and preserves subsequent edits", (t) => {
+test("normal launch opens Home without creating a project or requiring Python", (t) => {
   const options = fixture(t);
+  rmSync(path.join(options.resourcesPath, "python"), { recursive: true });
+  assert.equal(resolveRuntime(options), null);
+  assert.equal(resolveRuntime({ ...options, isPackaged: false }), null);
+  assert.equal(
+    resolveRuntime({ ...options, argv: ["--python", "/custom/python"] }),
+    null,
+  );
+});
+
+test("explicit smoke launch creates editable example and preserves subsequent edits", (t) => {
+  const options = fixture(t);
+  options.argv = ["--smoke-test"];
   const first = resolveRuntime(options);
   assert.equal(first.reference, "project:PROJECT");
   const project = path.join(first.projectDir, "project.py");
@@ -89,6 +101,7 @@ test("Linux development uses the selected project's virtual environment", (t) =>
     ...options,
     platform: "linux",
     isPackaged: false,
+    argv: ["--project-dir", options.cwd],
   });
   assert.equal(runtime.python, python);
   assert.equal(runtime.projectDir, options.cwd);
@@ -113,10 +126,23 @@ test("explicit Python override and development imports remain available", (t) =>
 test("missing bundled runtime and malformed CLI options fail clearly", (t) => {
   const options = fixture(t);
   rmSync(path.join(options.resourcesPath, "python"), { recursive: true });
-  assert.throws(() => resolveRuntime(options), /Bundled Python is missing/);
+  assert.throws(
+    () => resolveRuntime({ ...options, argv: ["--project-dir", options.cwd] }),
+    /Bundled Python is missing/,
+  );
   assert.throws(() => argument(["--python"], "--python"), /requires a value/);
   assert.throws(
     () => argument(["--project", "--python", "python"], "--project"),
     /requires a value/,
   );
+});
+
+test("explicit references normalize omitted attributes without changing import root", (t) => {
+  const options = fixture(t);
+  const runtime = resolveRuntime({
+    ...options,
+    argv: ["--project", " model.project "],
+  });
+  assert.equal(runtime.projectDir, options.cwd);
+  assert.equal(runtime.reference, "model.project:PROJECT");
 });

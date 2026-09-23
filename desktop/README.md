@@ -10,8 +10,24 @@ switch updates the viewport too and remembers the choice.
 The release pipeline builds macOS Apple Silicon and Intel DMG/ZIP downloads
 and Linux x64/ARM64 tarballs, with Python and CAD dependencies included.
 See [installation](../docs/how-to/install.md) and [release builds](../docs/contributing/releases.md).
-Opening the installed app creates an editable bracket project in the app's
-user-data directory. Existing edits survive later launches and upgrades.
+Launching without a project opens **Projects**. Choose **Open…** and select
+a folder. CadKit discovers Python entry points such as `project.py` containing
+`PROJECT`; choose an entry if the folder offers more than one. Discovery reads
+Python syntax without running the model. The picker's **Settings** lets you enter a
+custom import reference and Python interpreter.
+
+**New** writes a small starter into a new or empty folder.
+**Examples → Create** makes an editable bracket copy in a folder
+you choose. Existing files are never replaced. Python remains the project
+definition: no CadKit manifest, initialization command or `__init__.py` is
+required for namespace packages.
+
+Recent projects appear with previews. Pin a project to keep it near the top,
+remove it from recents without deleting its files, or use **Locate folder** when
+it has moved. Successful builds can save a preview; the project menu's **Use
+current view as preview** preserves a chosen view against automatic replacement.
+Recents, interpreter choices and thumbnails are stored in the app's user data.
+Use the **Home** button to return to the library.
 
 Open your own project from the command line, for example on macOS:
 
@@ -26,8 +42,10 @@ On Linux, the installer adds `cadkit-desktop` to `~/.local/bin`:
 cadkit-desktop --project-dir /path/to/project --project project:PROJECT
 ```
 
-Installed apps use their bundled Python by default. `--python /path/to/python` selects
-a custom environment if your project requires additional packages; install
+Installed apps use their bundled Python by default. Choose an interpreter in the
+picker's **Settings**, or reopen **Project settings…** from the project menu.
+Use `--python /path/to/python` when launching directly
+if your project requires additional packages; install
 `cadkit[desktop]` and those packages there first. A consumer with a `src/`
 package layout must be installed in that custom environment or supplied
 through `PYTHONPATH` with the `--python` override.
@@ -94,8 +112,7 @@ Opening a project executes its Python builders, just like the CadKit CLI.
   retains the previous geometry and measurement worker. Measurements are
   revision-scoped and recalculated after a successful rebuild.
 
-This version measures whole objects. Face/edge/axis selection, persistent
-annotations and a project picker remain future work.
+Measurements use whole objects; face/edge/axis selection is not available.
 Blender continues through the CadKit CLI.
 
 ## Mechanical connections

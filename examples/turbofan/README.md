@@ -7,7 +7,7 @@ design decisions, parts own local geometry, and assembly connections own motion.
 
 ## Open and build
 
-Run this example with CadKit 0.5.0 or later.
+Run this example with CadKit 0.5.1 or later.
 Prepare and activate a Python environment with the desktop extra, following
 the [installation guide](../../docs/how-to/install.md). Copy this entire
 `turbofan/` folder into your model directory and run these commands from the

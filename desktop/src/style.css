@@ -147,6 +147,73 @@ p {
   gap: 12px;
   font-weight: 500;
 }
+.project-menu {
+  position: relative;
+  min-width: 0;
+}
+.project-menu > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 5px;
+}
+.project-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.project-menu > summary:hover {
+  background: var(--hover);
+}
+.project-menu-actions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  padding: 6px;
+  min-width: 240px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.project-menu-actions button {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 10px;
+  font-size: 12px;
+}
+.project-recovery-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.launcher-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.launcher-error {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  max-width: calc(100vw - 48px);
+  padding: 14px 18px;
+  background: var(--panel);
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  font-size: 12px;
+}
 .project-breadcrumb > span:first-child {
   color: var(--quiet);
   margin-right: 6px;
@@ -588,6 +655,10 @@ p {
   color: var(--muted);
   font-size: 12px;
   max-width: 480px;
+  min-height: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
   word-break: break-word;
 }
 .primary-button {
@@ -1802,7 +1873,7 @@ dd {
 }
 .validation-panel {
   border-top: 1px solid var(--line);
-  padding: 17px 0;
+  padding: 20px 22px;
 }
 .validation-panel > h2 {
   display: flex;
@@ -1813,12 +1884,20 @@ dd {
 }
 .validation-panel > h2 button {
   margin-left: auto;
+  padding: 5px;
+}
+.validation-scope {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
 }
 .validation-counts {
   display: flex;
   flex-wrap: wrap;
   gap: 7px 12px;
-  padding: 12px 0;
+  padding: 14px 0;
   font-size: 10px;
   color: var(--muted);
 }
@@ -1827,52 +1906,166 @@ dd {
   gap: 5px;
   align-items: center;
 }
-.validation-counts button {
-  padding: 0;
+.validation-results {
+  margin-bottom: 18px;
 }
-.validation-counts button[aria-pressed="true"] {
-  color: var(--accent);
+.validation-results > h3 {
+  font-size: 11px;
+  font-weight: 550;
+  margin: 0 0 9px;
+}
+.validation-results > h3 > span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+  margin-top: 4px;
 }
 .finding-list {
   display: grid;
-  gap: 5px;
+  gap: 7px;
 }
 .mechanical-finding {
   border: 1px solid var(--line);
-  border-radius: 5px;
-  overflow: hidden;
+  border-radius: 6px;
+  min-width: 0;
 }
-.mechanical-finding summary {
+.mechanical-finding > summary {
   cursor: pointer;
   display: flex;
-  gap: 7px;
-  padding: 9px 8px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 10px;
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.5;
   list-style: none;
+  border-radius: 6px;
+}
+.mechanical-finding > summary::-webkit-details-marker,
+.validation-passed > summary::-webkit-details-marker {
+  display: none;
+}
+.mechanical-finding > summary:hover,
+.validation-passed > summary:hover {
+  background: var(--panel-raised);
 }
 .mechanical-finding summary .connection-status {
   padding-top: 2px;
+  flex-shrink: 0;
 }
-.mechanical-finding summary > span:last-child {
+.finding-heading {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.mechanical-finding[open] summary {
-  background: var(--panel-raised);
+.finding-heading strong {
+  display: block;
+  font-weight: 500;
+}
+.finding-heading small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
+.finding-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.mechanical-finding[open] > summary > .finding-chevron,
+.validation-passed[open] > summary > .finding-chevron {
+  transform: rotate(90deg);
 }
 .finding-detail {
-  padding: 8px;
-}
-.finding-detail small {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-  display: block;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+  font-size: 11px;
   line-height: 1.5;
-  margin-bottom: 8px;
 }
-.finding-detail pre,
-.validation-coverage pre {
+.finding-description {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+.finding-target + .finding-target {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.finding-subject {
+  display: block;
+  font-weight: 550;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+.finding-components {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.finding-components > li {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  padding: 3px 6px;
+  color: var(--text);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.finding-part-list {
+  color: var(--muted);
+  font-size: 10px;
+  margin: 7px 0;
+}
+.finding-part-list > summary {
+  cursor: pointer;
+  padding: 3px 0;
+}
+.finding-part-list .finding-components {
+  margin-top: 7px;
+}
+.finding-show {
+  color: var(--accent);
+  padding: 4px 0;
+  margin-bottom: 7px;
+  font-size: 10px;
+}
+.finding-measurements {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  margin: 8px 0;
+  font-size: 10px;
+}
+.finding-measurements > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+}
+.finding-measurements dd {
+  white-space: normal;
+  overflow: visible;
+  max-width: 135px;
+  overflow-wrap: anywhere;
+}
+.finding-technical {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 8px;
+}
+.finding-technical > summary {
+  cursor: pointer;
+  padding: 3px 0;
+}
+.finding-technical p {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.finding-technical pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 10px;
@@ -1881,12 +2074,34 @@ dd {
   max-height: 220px;
   overflow-y: auto;
 }
-.validation-coverage {
-  margin-top: 10px;
-  font-size: 10px;
+.validation-passed {
+  margin: 12px 0;
+  font-size: 11px;
+}
+.validation-passed > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
   color: var(--muted);
 }
-.validation-coverage summary {
+.validation-passed > summary .finding-chevron {
+  margin-left: auto;
+}
+.validation-passed > .finding-list {
+  margin-top: 6px;
+}
+.validation-coverage {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.validation-coverage > summary {
   cursor: pointer;
 }
 .status-validation {
@@ -1959,7 +2174,7 @@ dd {
 }
 .print-validation .validation-panel {
   border: 0;
-  padding-bottom: 0;
+  padding: 17px 0 0;
 }
 @media (min-width: 1600px) {
   .connections-tab-label {

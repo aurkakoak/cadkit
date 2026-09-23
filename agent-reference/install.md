@@ -1,7 +1,8 @@
 # Install CadKit
 
-The desktop app includes Python and the CAD libraries. Install it, open it,
-and start with the editable example shown on first launch.
+The desktop app includes Python and the CAD libraries. Launching without an
+explicit project opens Projects, where the user can open a folder, create a starter
+or copy the bracket example.
 
 ## macOS
 
@@ -31,8 +32,24 @@ run `~/.local/bin/cadkit-desktop`.
 
 ## Open your own project
 
-Save an importable CadKit project as `project.py` with a `PROJECT` attribute.
-From that project's directory, launch the installed app on macOS:
+Use **Open…** in Projects and select the folder. CadKit discovers obvious
+Python exports such as `project.py` containing `PROJECT` without importing the
+project. Multiple exports appear in an entry-point chooser. Relative imports in
+namespace packages are supported without adding `__init__.py` files.
+
+**Settings** accepts an explicit folder, `module:attribute` reference
+and Python interpreter. Omitted attributes mean `PROJECT`. Python remains the
+sole project definition; do not add a manifest or run an initialization step
+just to open an existing model. Opening the selected entry runs its builders.
+
+**New** writes a minimal public-API starter into a new or empty folder.
+**Examples → Create** copies the bracket example. The app stores recents and
+previews in app data: pin entries, remove them without deleting source files, or
+locate moved folders. The project menu can save the current view as its preview;
+automatic captures from successful builds preserve that manual choice.
+
+Explicit command-line launches still open their target directly. From the
+directory containing `project.py`, launch the installed app on macOS:
 
 ```sh
 "$HOME/Applications/CadKit.app/Contents/MacOS/CadKit" \
@@ -47,7 +64,9 @@ On Linux:
 ```
 
 The app uses its bundled Python by default. For projects with additional
-Python dependencies, append `--python /absolute/path/to/.venv/bin/python`.
+Python dependencies, choose the interpreter in the picker's **Settings** (the
+workbench opens it through **Project settings…**), or append
+`--python /absolute/path/to/.venv/bin/python` to a direct launch.
 That environment must have CadKit and its `desktop` extra installed.
 
 ## Python CLI and agent skill
@@ -58,7 +77,7 @@ and create a project environment:
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.1"
 # Add your project.py, then:
 uv run cadkit --project project:PROJECT build all
 ```

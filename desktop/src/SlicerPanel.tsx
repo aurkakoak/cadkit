@@ -8,7 +8,7 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
-import { ValidationPanel } from "./ConnectionsPanel";
+import { ValidationPanel } from "./ValidationPanel";
 import type {
   MechanicalReport,
   Snapshot,
@@ -357,6 +357,7 @@ export function SlicerPanel({
       </div>
       <div className="print-validation">
         <ValidationPanel
+          scene={scene}
           report={validatedKey === validationKey ? validation : null}
           busy={validating}
           error={validationError}

@@ -109,6 +109,27 @@ test("connections, selective hardware presentation and pre-print review stay dis
       .click();
     await expect(page.locator(".assembly-preview-badge")).not.toBeVisible();
     await expect(page.getByLabel("Measurement object A")).toBeEnabled();
+    // A finding points to every affected part, including hardware hidden by
+    // the presentation controls, rather than selecting only its first part.
+    const failure = page
+      .locator(
+        '[data-inspected-connection="left-bolt"] .mechanical-finding.fail',
+      )
+      .first();
+    const finding = JSON.parse(
+      (await failure.locator(".finding-technical pre").textContent())!,
+    );
+    await page.getByLabel("Hardware visibility").selectOption("hidden");
+    await failure.getByRole("button", { name: /^Show parts for / }).click();
+    await expect(page.getByLabel("Hardware visibility")).toHaveValue(
+      "selected",
+    );
+    await expect(page.getByLabel("Measurement object A")).toHaveValue(
+      finding.component_ids[0],
+    );
+    await expect(page.getByLabel("Measurement object B")).toHaveValue(
+      finding.component_ids[1],
+    );
     // Selecting another fastening reveals only its own hardware.
     await page
       .getByRole("button", {

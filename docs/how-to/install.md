@@ -24,15 +24,34 @@ On Linux, open CadKit from the application menu, or run:
 "$HOME/.local/bin/cadkit-desktop"
 ```
 
-The Linux installation lives in `~/.local/share/cadkit`. The first launch on
-either platform creates an editable example project; subsequent launches keep
-your edits.
+The Linux installation lives in `~/.local/share/cadkit`. Launching without a
+project opens **Projects** on either platform.
 
 ## Open your own project
 
-Your project directory must contain an importable Python module with a
-`cadkit.Project` object. For a file named `project.py` containing `PROJECT`,
-change into that directory and launch the app with `project:PROJECT`.
+Choose **Open…** in Projects and select your project folder. CadKit looks
+for Python entry points such as a `project.py` file containing `PROJECT`. Select
+the entry you want if it finds several. Namespace packages work without
+`__init__.py`; discovery chooses the containing import folder for relative imports.
+
+For a custom layout, expand **Settings** and enter the folder and Python
+import reference, such as `my_machine.project:PROJECT`. The referenced value must
+be a compiled `cadkit.Project`. Python is the project definition; no CadKit
+manifest or initialization command is needed. Discovery does not run the model;
+opening it builds the geometry.
+
+**New** writes a minimal starter in a new or empty folder.
+**Examples → Create** copies the bracket example. Both ask where to save the
+Python files and leave existing files untouched.
+
+Recent projects appear with previews. Pin frequently used projects, remove an
+entry without deleting its files, or choose **Locate folder** for a moved project.
+The project menu's **Use current view as preview** saves your chosen view;
+automatic previews from successful builds will not replace it. Return with the
+**Home** button.
+
+You can also open a project directly from a terminal. For `project.py` containing
+`PROJECT`, change into its directory and launch with `project:PROJECT`.
 
 On macOS:
 
@@ -63,7 +82,7 @@ an environment:
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.0"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.1"
 ```
 
 Add your `project.py`, then check that CadKit can load it:
@@ -83,8 +102,10 @@ version control so that collaborators use the same dependencies.
 
 ## Use additional Python dependencies in the desktop
 
-Add dependencies to your project with `uv add`, then append this option to the
-desktop launch command:
+Add dependencies to your project with `uv add`, then select that environment's
+Python executable in the picker's **Settings → Python interpreter**. For an open
+project, use **Project settings…** in its project menu. Leave the interpreter field
+empty to use the app's default. For a direct launch, append:
 
 ```sh
 --python "$PWD/.venv/bin/python"
@@ -95,8 +116,8 @@ Use the same environment for CLI validation and desktop inspection.
 
 | Problem | What to check |
 | --- | --- |
-| The app cannot import `project` | `--project-dir` points to the folder containing `project.py` |
-| A dependency cannot be imported | Pass the project environment with `--python`; install the dependency there |
+| The app cannot import `project` | Check the folder and entry point in Settings, or the `--project-dir` argument |
+| A dependency cannot be imported | Choose the project's Python interpreter or pass `--python`; install the dependency there |
 | `ocp_tessellate` is missing | Install CadKit with the `desktop` extra in the selected environment |
 | `cadkit-desktop` is not found on Linux | Use its full `~/.local/bin/cadkit-desktop` path or add that directory to `PATH` |
 

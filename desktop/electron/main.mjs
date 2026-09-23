@@ -4,11 +4,14 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
   shell,
 } from "electron";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { writeFileSync } from "node:fs";
+import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
@@ -16,39 +19,67 @@ import { startBridge } from "./local-bridge.mjs";
 import { validateCommand } from "./control-schema.mjs";
 import { Slicer } from "./slicer.mjs";
 import { argument, resolveRuntime } from "./runtime.mjs";
+import {
+  ProjectLibrary,
+  normalizeReference,
+  projectIdentity,
+} from "./projects.mjs";
 
 const desktop = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 const framework = path.resolve(desktop, "..");
-// Tests use their own profile; the normal app retains its theme preference.
 if (process.env.CADKIT_USER_DATA)
   app.setPath("userData", process.env.CADKIT_USER_DATA);
-const {
-  projectDir,
-  reference,
-  python,
-  workerEnv: pythonEnv,
-} = resolveRuntime({
+const smokeTest = process.argv.includes("--smoke-test");
+const smokeOutput = argument(process.argv, "--smoke-output");
+const startupPython = argument(process.argv, "--python");
+const runtimeOptions = {
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
   userData: app.getPath("userData"),
   framework,
-});
-const smokeTest = process.argv.includes("--smoke-test");
-const smokeOutput = argument(process.argv, "--smoke-output");
-let window, current, candidate, snapshot, building;
-let queued = false;
-let status = { phase: "idle", message: "Ready to build" };
-let watcher, debounce;
-let bridge, slicer;
-let mechanicalReport = null;
+};
+const library = new ProjectLibrary(runtimeOptions);
+let window, active;
+let transitions = Promise.resolve();
 const rendererRequests = new Map();
 let rendererSequence = 0;
-const workerEnv = () => ({ ...pythonEnv });
+const homeStatus = { phase: "idle", message: "Open a project to begin" };
 
-function control(method, params = {}) {
+function assertSession(session) {
+  if (!session || active !== session || session.closed)
+    throw new Error("Project session changed. Open the current project again.");
+}
+function requireSession() {
+  assertSession(active);
+  return active;
+}
+function checkRevision(session, revision) {
+  assertSession(session);
+  if (!session.snapshot || session.snapshot.revision !== revision)
+    throw new Error("Stale build revision. Read get_state again.");
+}
+function send(event) {
+  if (window && !window.isDestroyed())
+    window.webContents.send("cadkit:event", event);
+}
+function publish(session, event) {
+  if (active !== session || session.closed) return;
+  if (event.type === "status") session.status = event;
+  send({ ...event, sessionId: session.sessionId });
+}
+function rejectControls(message, session) {
+  for (const [id, pending] of rendererRequests) {
+    if (session && pending.session !== session) continue;
+    clearTimeout(pending.timer);
+    pending.reject(new Error(message));
+    rendererRequests.delete(id);
+  }
+}
+function control(session, method, params = {}) {
+  assertSession(session);
   if (!window || window.isDestroyed())
     throw new Error("CadKit window is unavailable");
   return new Promise((resolve, reject) => {
@@ -57,30 +88,61 @@ function control(method, params = {}) {
       rendererRequests.delete(id);
       reject(new Error("CadKit view did not respond"));
     }, 30000);
-    rendererRequests.set(id, { resolve, reject, timer });
-    window.webContents.send("cadkit:control", { id, method, params });
+    rendererRequests.set(id, { resolve, reject, timer, session });
+    window.webContents.send("cadkit:control", {
+      id,
+      method,
+      params,
+      sessionId: session.sessionId,
+    });
   });
 }
 ipcMain.on("cadkit:control-result", (event, response) => {
-  if (event.sender !== window?.webContents) return;
+  if (
+    event.sender !== window?.webContents ||
+    !response ||
+    typeof response.id !== "number"
+  )
+    return;
   const pending = rendererRequests.get(response.id);
   if (!pending) return;
   rendererRequests.delete(response.id);
   clearTimeout(pending.timer);
-  response.error
-    ? pending.reject(new Error(response.error))
-    : pending.resolve(response.result);
+  if (active !== pending.session || pending.session.closed) {
+    pending.reject(new Error("Project session changed"));
+  } else if (response.error) pending.reject(new Error(String(response.error)));
+  else pending.resolve(response.result);
 });
-
-function checkRevision(revision) {
-  if (!snapshot || snapshot.revision !== revision)
-    throw new Error("Stale build revision. Read get_state again.");
+function dispatch(session, method, params) {
+  const result = session.commandQueue.then(async () => {
+    assertSession(session);
+    const result = await executeTool(session, method, params);
+    assertSession(session);
+    if (params?.revision) checkRevision(session, params.revision);
+    return result;
+  });
+  session.commandQueue = result.catch(() => {});
+  return result;
 }
-async function executeTool(method, raw) {
+
+async function executeTool(session, method, raw) {
+  assertSession(session);
+  const { snapshot, current, status, mechanicalReport, slicer } = session;
+  const { projectDir, reference } = session.target;
+  if (
+    !snapshot &&
+    ![
+      "slicer_settings",
+      "slice_status",
+      "cancel_slice",
+      "open_in_slicer",
+    ].includes(method)
+  )
+    throw new Error("Build a project first");
   const params = validateCommand(method, raw);
-  if (params.revision) checkRevision(params.revision);
+  if (params.revision) checkRevision(session, params.revision);
   if (method === "get_state") {
-    const ui = await control("get_state");
+    const ui = await control(session, "get_state");
     if (!snapshot || ui.revision !== snapshot.revision)
       throw new Error("View is rebuilding; retry get_state");
     return {
@@ -98,9 +160,9 @@ async function executeTool(method, raw) {
   if (method === "mechanical_report") {
     const worker = current;
     const result = await worker.call("mechanical_report", params);
-    checkRevision(params.revision);
-    mechanicalReport = result;
-    await control("show_mechanical_report", result);
+    checkRevision(session, params.revision);
+    session.mechanicalReport = result;
+    await control(session, "show_mechanical_report", result);
     return result;
   }
   if (method === "inspect_connection") {
@@ -145,7 +207,7 @@ async function executeTool(method, raw) {
     };
   }
   if (method === "measure") {
-    const ui = await control("get_state");
+    const ui = await control(session, "get_state");
     if (ui.hardwareView?.previewProgress > 0)
       throw new Error(
         "Restore installed hardware (previewProgress=0) before measuring native geometry",
@@ -155,13 +217,13 @@ async function executeTool(method, raw) {
       ids: params.ids,
     });
     if (params.show) {
-      checkRevision(params.revision);
-      await control("show_measurement", result);
+      checkRevision(session, params.revision);
+      await control(session, "show_measurement", result);
     }
     return result;
   }
   if (method === "screenshot") {
-    const state = await control("get_state");
+    const state = await control(session, "get_state");
     const rect = params.target === "viewport" ? state.viewport : undefined;
     if (params.target === "viewport" && !rect)
       throw new Error("Viewport is not ready");
@@ -185,24 +247,12 @@ async function executeTool(method, raw) {
   if (method === "slice_status") return slicer.list(params.id);
   if (method === "cancel_slice") return slicer.cancel(params.id);
   if (method === "open_in_slicer") return slicer.open(params.id);
-  return control(method, params);
-}
-// Serialize UI operations so each acknowledgement describes a committed view.
-let commandQueue = Promise.resolve();
-function dispatch(method, params) {
-  const result = commandQueue.then(() => executeTool(method, params));
-  commandQueue = result.catch(() => {});
-  return result;
-}
-
-function publish(event) {
-  if (event.type === "status") status = event;
-  if (window && !window.isDestroyed())
-    window.webContents.send("cadkit:event", event);
+  return control(session, method, params);
 }
 
 class Worker {
-  constructor() {
+  constructor(session) {
+    const { python, projectDir, reference, workerEnv } = session.runtime;
     this.sequence = 0;
     this.pending = new Map();
     this.log = "";
@@ -212,7 +262,7 @@ class Worker {
       ["-u", "-m", "cadkit.desktop", "--project", reference],
       {
         cwd: projectDir,
-        env: workerEnv(),
+        env: { ...workerEnv },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       },
@@ -230,8 +280,8 @@ class Worker {
         return;
       }
       if (response.event === "progress") {
-        if (candidate === this)
-          publish({
+        if (active === session && session.candidate === this)
+          publish(session, {
             type: "status",
             phase: "building",
             message: response.message,
@@ -287,71 +337,453 @@ class Worker {
   }
 }
 
-async function rebuild() {
-  if (building) {
-    queued = true;
-    return building;
+async function rebuild(session = requireSession()) {
+  assertSession(session);
+  if (session.building) {
+    session.queued = true;
+    return session.building;
   }
-  building = (async () => {
-    publish({
+  const task = (async () => {
+    publish(session, {
       type: "status",
       phase: "building",
       message: "Starting CadQuery…",
     });
-    candidate = new Worker();
+    const candidate = new Worker(session);
+    session.candidate = candidate;
     try {
       const next = await candidate.call("scene");
-      const previous = current;
-      current = candidate;
-      candidate = undefined;
-      snapshot = next;
-      mechanicalReport = null;
+      assertSession(session);
+      const previous = session.current;
+      session.current = candidate;
+      session.candidate = undefined;
+      session.snapshot = next;
+      session.mechanicalReport = null;
       previous?.close();
-      publish({ type: "scene", scene: next });
-      publish({
+      publish(session, { type: "scene", scene: next });
+      publish(session, {
         type: "status",
         phase: "ready",
         message: `Built in ${next.build_seconds.toFixed(1)}s`,
       });
+      void library
+        .rename(session.id, next.project.name)
+        .then(() => publishLauncher())
+        .catch((error) =>
+          console.error("Could not update recent project:", error),
+        );
       return next;
     } catch (error) {
-      candidate?.close();
-      candidate = undefined;
-      publish({ type: "status", phase: "error", message: error.message });
-      // Keep the last successful scene AND worker available for inspection.
+      candidate.close();
+      if (session.candidate === candidate) session.candidate = undefined;
+      publish(session, {
+        type: "status",
+        phase: "error",
+        message: error.message,
+      });
       throw error;
     }
   })();
+  session.building = task;
   try {
-    return await building;
+    return await task;
   } finally {
-    building = undefined;
-    if (queued) {
-      queued = false;
-      void rebuild().catch(() => {});
+    if (session.building === task) session.building = undefined;
+    if (active === session && !session.closed && session.queued) {
+      session.queued = false;
+      void rebuild(session).catch(() => {});
     }
   }
 }
 
-ipcMain.handle("cadkit:load", async () => {
-  const scene = snapshot ?? (await (building ?? rebuild()));
-  return { scene, status, projectDir, reference };
+async function launcherState() {
+  const recents = await library.list();
+  return {
+    active: active
+      ? { ...active.target, id: active.id, sessionId: active.sessionId }
+      : null,
+    recents,
+  };
+}
+function updateMenu(state) {
+  const open = () => send({ type: "open-project" });
+  const act = (operation) => {
+    void operation().catch((error) =>
+      dialog.showErrorBox("CadKit", error.message),
+    );
+  };
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      ...(process.platform === "darwin" ? [{ role: "appMenu" }] : []),
+      {
+        label: "File",
+        submenu: [
+          {
+            label: "Home",
+            accelerator: "CmdOrCtrl+Shift+H",
+            click: () => act(() => transition(closeProject)),
+          },
+          { label: "Open Project…", accelerator: "CmdOrCtrl+O", click: open },
+          {
+            label: "Open Recent",
+            submenu: state.recents.length
+              ? state.recents.slice(0, 15).map((recent) => ({
+                  label: `${recent.name} — ${recent.reference}`,
+                  click: () => act(() => openRecent(recent.id)),
+                }))
+              : [{ label: "No recent projects", enabled: false }],
+          },
+          { type: "separator" },
+          { role: process.platform === "darwin" ? "close" : "quit" },
+        ],
+      },
+      { role: "editMenu" },
+      { role: "viewMenu" },
+      { role: "windowMenu" },
+    ]),
+  );
+}
+async function publishLauncher() {
+  const state = await launcherState();
+  updateMenu(state);
+  send({ type: "launcher", state });
+  return state;
+}
+function transition(operation) {
+  const result = transitions.then(operation);
+  transitions = result.catch(() => {});
+  return result;
+}
+async function stopSession(session = active) {
+  if (!session) return;
+  if (active === session) active = undefined;
+  session.closed = true;
+  session.queued = false;
+  clearTimeout(session.debounce);
+  rejectControls("Project session changed", session);
+  session.current?.close();
+  session.candidate?.close();
+  session.slicer?.close();
+  const stopped = await Promise.allSettled([
+    session.watcher?.close(),
+    session.bridge?.close(),
+  ]);
+  const failed = stopped.find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
+}
+async function closeProject() {
+  try {
+    await stopSession();
+  } finally {
+    await publishLauncher();
+  }
+  return launcherState();
+}
+function checkedString(value, label) {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 16384 ||
+    value.includes("\0")
+  )
+    throw new Error(`Invalid ${label}`);
+  return value.trim();
+}
+function checkedId(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{24}$/.test(value))
+    throw new Error("Invalid project ID");
+  return value;
+}
+async function checkedTarget(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Invalid project target");
+  const projectDir = await realpath(
+    checkedString(value.projectDir, "project folder"),
+  );
+  if (!(await stat(projectDir)).isDirectory())
+    throw new Error("Choose a project folder");
+  const reference = normalizeReference(
+    checkedString(value.reference, "project reference"),
+  );
+  const python =
+    value.python === ""
+      ? undefined
+      : value.python === undefined
+        ? startupPython
+        : checkedString(value.python, "Python executable");
+  if (value.replaceRecentId !== undefined) checkedId(value.replaceRecentId);
+  return { projectDir, reference, python };
+}
+async function activate(value) {
+  const target = await checkedTarget(value);
+  const id = await projectIdentity(target);
+  if (active?.id === id && active.target.python === target.python) {
+    await library.remember(target, { replaceRecentId: value.replaceRecentId });
+    if (active.status.phase === "error") void rebuild(active).catch(() => {});
+    window?.focus();
+    return publishLauncher();
+  }
+  const runtime = resolveRuntime({
+    ...runtimeOptions,
+    argv: [
+      "--project-dir",
+      target.projectDir,
+      "--project",
+      target.reference,
+      ...(target.python ? ["--python", target.python] : []),
+    ],
+  });
+  const session = {
+    id,
+    sessionId: randomUUID(),
+    target,
+    runtime,
+    status: { phase: "idle", message: "Ready to build" },
+    snapshot: null,
+    mechanicalReport: null,
+    current: undefined,
+    candidate: undefined,
+    building: undefined,
+    queued: false,
+    closed: false,
+    commandQueue: Promise.resolve(),
+    watcher: undefined,
+    bridge: undefined,
+    slicer: undefined,
+    debounce: undefined,
+  };
+  // Reserve the new bridge before closing a different project. A project that
+  // is already open in another app cannot displace this window's working session.
+  if (active?.id === id) await stopSession();
+  try {
+    session.bridge = await startBridge(
+      target.projectDir,
+      target.reference,
+      (method, params) => dispatch(session, method, params),
+    );
+    await stopSession();
+    active = session;
+    await library.remember(target, { replaceRecentId: value.replaceRecentId });
+    session.slicer = new Slicer({
+      userData: app.getPath("userData"),
+      projectDir: runtime.projectDir,
+      python: runtime.python,
+      env: { ...runtime.workerEnv },
+      publish: (event) => publish(session, event),
+      exportParts: async (revision, names, output_dir, validation_override) => {
+        checkRevision(session, revision);
+        if (session.status.phase !== "ready")
+          throw new Error(
+            "Wait for a successful current build before exporting",
+          );
+        const result = await session.current.call("export_parts", {
+          revision,
+          names,
+          output_dir,
+          validation_override,
+        });
+        checkRevision(session, revision);
+        return result;
+      },
+    });
+    session.watcher = chokidar.watch(
+      app.isPackaged
+        ? [target.projectDir]
+        : [target.projectDir, path.join(framework, "src")],
+      {
+        ignored: (file, stats) =>
+          /(?:^|[/\\])(?:\.git|\.venv|node_modules|__pycache__|build|dist|vendor|archive)(?:[/\\]|$)/.test(
+            file,
+          ) || Boolean(stats?.isFile() && !file.endsWith(".py")),
+        ignoreInitial: true,
+        awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+      },
+    );
+    session.watcher.on("all", (_event, file) => {
+      if (!file.endsWith(".py") || active !== session || session.closed) return;
+      clearTimeout(session.debounce);
+      session.debounce = setTimeout(() => {
+        if (active === session) void rebuild(session).catch(() => {});
+      }, 500);
+    });
+    session.watcher.on("error", (error) =>
+      publish(session, {
+        type: "status",
+        phase: "error",
+        message: `File watcher: ${error.message}`,
+      }),
+    );
+    const state = await publishLauncher();
+    void rebuild(session).catch(() => {});
+    return state;
+  } catch (error) {
+    await stopSession(session).catch(() => {});
+    await publishLauncher();
+    throw error;
+  }
+}
+async function chooseDirectory(title, properties = ["openDirectory"]) {
+  const selected = await dialog.showOpenDialog(window, { title, properties });
+  return selected.canceled ? null : selected.filePaths[0];
+}
+async function locateProject(id) {
+  checkedId(id);
+  const recent = (await library.list()).find((entry) => entry.id === id);
+  if (!recent) throw new Error("Unknown recent project");
+  const directory = await chooseDirectory(`Locate ${recent.name}`);
+  if (!directory) return null;
+  const choice = await library.inspect(directory);
+  if (!choice.suggestedPython && recent.python) {
+    // An environment inside a relocated project may have moved too. Prefer a
+    // newly discovered environment; retain external interpreters still present.
+    const available =
+      !path.isAbsolute(recent.python) ||
+      (await stat(recent.python).then(
+        (entry) => entry.isFile(),
+        () => false,
+      ));
+    if (available) choice.suggestedPython = recent.python;
+  }
+  return { ...choice, replaceRecentId: id };
+}
+async function openRecent(id) {
+  const recent = (await library.list()).find((entry) => entry.id === id);
+  if (!recent) throw new Error("Unknown recent project");
+  if (recent.missing) {
+    const choice = await locateProject(id);
+    if (choice) send({ type: "open-project", choice });
+    return;
+  }
+  return transition(() => activate(recent));
+}
+function handle(name, callback) {
+  ipcMain.handle(name, (event, ...args) => {
+    if (event.sender !== window?.webContents)
+      throw new Error("Unknown CadKit window");
+    return callback(...args);
+  });
+}
+handle("cadkit:launcher-state", launcherState);
+handle("cadkit:choose-project", async () => {
+  const directory = await chooseDirectory("Open a CadKit project folder");
+  return directory ? library.inspect(directory) : null;
 });
-ipcMain.handle("cadkit:rebuild", () => rebuild());
-ipcMain.handle("cadkit:open-link", (_event, value) => {
-  if (typeof value !== "string") throw new Error("Invalid link");
-  const url = new URL(value);
+handle("cadkit:open-project", (target) => transition(() => activate(target)));
+handle("cadkit:close-project", () => transition(closeProject));
+handle("cadkit:create-project", async (template) => {
+  if (!["starter", "bracket"].includes(template))
+    throw new Error("Unknown project template");
+  const directory = await chooseDirectory(
+    "Choose a folder for the new project",
+    ["openDirectory", "createDirectory"],
+  );
+  if (!directory) return null;
+  return transition(async () =>
+    activate(await library.create(directory, template)),
+  );
+});
+handle("cadkit:pin-project", async (id, pinned) => {
+  if (typeof pinned !== "boolean") throw new Error("Invalid pin preference");
+  await library.pin(checkedId(id), pinned);
+  return publishLauncher();
+});
+handle("cadkit:remove-project", async (id) => {
+  await library.remove(checkedId(id));
+  return publishLauncher();
+});
+handle("cadkit:locate-project", locateProject);
+handle("cadkit:pick-project-python", async () => {
+  const selected = await dialog.showOpenDialog(window, {
+    title: "Choose a Python executable",
+    properties: ["openFile"],
+  });
+  return selected.canceled ? null : selected.filePaths[0];
+});
+handle("cadkit:save-project-preview", async (params) => {
+  const session = requireSession();
+  if (
+    !params ||
+    typeof params !== "object" ||
+    typeof params.revision !== "string" ||
+    (params.manual !== undefined && typeof params.manual !== "boolean")
+  )
+    throw new Error("Invalid project preview request");
+  checkRevision(session, params.revision);
+  if (session.status.phase !== "ready")
+    throw new Error("A successful current build is required for a preview");
+  const ui = await control(session, "get_state");
+  checkRevision(session, params.revision);
+  if (ui.revision !== params.revision || session.status.phase !== "ready")
+    throw new Error("The viewport is not ready for this revision");
+  const rect = ui.viewport;
+  if (
+    !rect ||
+    ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
+    rect.x < 0 ||
+    rect.y < 0 ||
+    rect.width < 1 ||
+    rect.height < 1
+  )
+    throw new Error("Viewport is not ready");
+  let image = await window.webContents.capturePage({
+    x: Math.floor(rect.x),
+    y: Math.floor(rect.y),
+    width: Math.floor(rect.width),
+    height: Math.floor(rect.height),
+  });
+  checkRevision(session, params.revision);
+  if (session.status.phase !== "ready")
+    throw new Error("The project changed during preview capture");
+  if (image.isEmpty())
+    throw new Error("Viewport preview could not be captured");
+  if (image.getSize().width > 640) image = image.resize({ width: 640 });
+  await library.writePreview(session.id, image.toPNG(), {
+    manual: params.manual === true,
+  });
+  await publishLauncher();
+});
+handle("cadkit:load", async () => {
+  const session = active;
+  if (!session)
+    return {
+      scene: null,
+      status: homeStatus,
+      projectDir: null,
+      reference: null,
+      launcher: await launcherState(),
+    };
+  const scene =
+    session.snapshot ?? (await (session.building ?? rebuild(session)));
+  assertSession(session);
+  const launcher = await launcherState();
+  assertSession(session);
+  return {
+    scene,
+    status: session.status,
+    projectDir: session.target.projectDir,
+    reference: session.target.reference,
+    launcher,
+  };
+});
+handle("cadkit:rebuild", () => rebuild());
+handle("cadkit:open-link", (value) => {
+  const url = new URL(checkedString(value, "link"));
   if (!["https:", "http:"].includes(url.protocol))
     throw new Error("Only web links are supported");
   return shell.openExternal(url.href);
 });
-ipcMain.handle("cadkit:slicer-settings", () => slicer.settings());
-ipcMain.handle("cadkit:slicer-save", (_event, values) => {
-  // Executables and profile paths are picked through native dialogs only.
+handle("cadkit:slicer-settings", () => requireSession().slicer.settings());
+handle("cadkit:slicer-save", async (values) => {
+  const session = requireSession();
+  if (!values || typeof values !== "object")
+    throw new Error("Invalid slicer settings");
   const { kind, price, currency, bed } = values;
-  return slicer.save({ kind, price, currency, bed });
+  const result = await session.slicer.save({ kind, price, currency, bed });
+  assertSession(session);
+  return result;
 });
-ipcMain.handle("cadkit:slicer-pick", async (_event, key) => {
+handle("cadkit:slicer-pick", async (key) => {
+  const session = requireSession();
   if (
     !["executable", "profile", "machine", "process", "filament"].includes(key)
   )
@@ -370,11 +802,12 @@ ipcMain.handle("cadkit:slicer-pick", async (_event, key) => {
           ],
         }),
   });
+  assertSession(session);
   return selected.canceled
-    ? slicer.settings()
-    : slicer.save({ [key]: selected.filePaths[0] });
+    ? session.slicer.settings()
+    : session.slicer.save({ [key]: selected.filePaths[0] });
 });
-ipcMain.handle("cadkit:slicer-action", (_event, method, params) => {
+handle("cadkit:slicer-action", (method, params) => {
   if (
     ![
       "slice_parts",
@@ -385,82 +818,78 @@ ipcMain.handle("cadkit:slicer-action", (_event, method, params) => {
     ].includes(method)
   )
     throw new Error("Unknown slicer operation");
-  return dispatch(method, params);
+  return dispatch(requireSession(), method, params);
 });
-ipcMain.handle("cadkit:slicer-reveal", (_event, id) =>
-  shell.openPath(slicer.list(id).directory),
+handle("cadkit:slicer-reveal", (id) =>
+  shell.openPath(
+    requireSession().slicer.list(checkedString(id, "slice ID")).directory,
+  ),
 );
-ipcMain.handle("cadkit:mcp-config", () => {
-  const config = {
-    mcpServers: {
-      cadkit: {
-        command: app.isPackaged
-          ? process.execPath
-          : (process.env.npm_node_execpath ?? "node"),
-        args: [
-          app.isPackaged ? "--mcp" : path.join(desktop, "electron/mcp.mjs"),
-          "--project-dir",
-          projectDir,
-          "--project",
-          reference,
-        ],
+handle("cadkit:mcp-config", () => {
+  const session = requireSession();
+  clipboard.writeText(
+    JSON.stringify(
+      {
+        mcpServers: {
+          cadkit: {
+            command: app.isPackaged
+              ? process.execPath
+              : (process.env.npm_node_execpath ?? "node"),
+            args: [
+              app.isPackaged ? "--mcp" : path.join(desktop, "electron/mcp.mjs"),
+              "--project-dir",
+              session.target.projectDir,
+              "--project",
+              session.target.reference,
+            ],
+          },
+        },
       },
-    },
-  };
-  clipboard.writeText(JSON.stringify(config, null, 2));
+      null,
+      2,
+    ),
+  );
   return { copied: true };
 });
-ipcMain.handle("cadkit:mechanical-report", (_event, params) =>
-  dispatch("mechanical_report", params),
+handle("cadkit:mechanical-report", (params) =>
+  dispatch(requireSession(), "mechanical_report", params),
 );
-ipcMain.handle("cadkit:measure", async (_event, params) => {
-  if (!current) throw new Error("Build a project first");
+handle("cadkit:measure", (params) =>
+  dispatch(requireSession(), "measure", { ...params, show: false }),
+);
+handle("cadkit:export", async (name, validation_override) => {
+  const session = requireSession();
   if (
-    !params ||
-    typeof params.revision !== "string" ||
-    !Array.isArray(params.ids) ||
-    params.ids.length !== 2 ||
-    !params.ids.every((id) => typeof id === "string")
-  ) {
-    throw new Error("Invalid measurement request");
-  }
-  const ui = await control("get_state");
-  if (ui.hardwareView?.previewProgress > 0)
-    throw new Error(
-      "Restore installed hardware before measuring native geometry",
-    );
-  return current.call("measure", {
-    revision: params.revision,
-    ids: params.ids,
-  });
-});
-ipcMain.handle("cadkit:export", async (_event, name, validation_override) => {
-  if (
-    !current ||
+    !session.current ||
     typeof name !== "string" ||
-    !snapshot.project.parts.some((p) => p.name === name)
-  ) {
+    !session.snapshot.project.parts.some((part) => part.name === name)
+  )
     throw new Error("Unknown part");
-  }
-  if (status.phase !== "ready")
+  if (
+    validation_override !== undefined &&
+    (typeof validation_override !== "string" ||
+      validation_override.trim().length < 3 ||
+      validation_override.length > 1000)
+  )
+    throw new Error("Invalid validation override");
+  if (session.status.phase !== "ready")
     throw new Error("Wait for a successful current build before exporting");
-  const revision = snapshot.revision;
+  const revision = session.snapshot.revision;
   const selected = await dialog.showOpenDialog(window, {
     title: `Export ${name} · choose a destination folder`,
-    defaultPath: path.join(projectDir, "build"),
+    defaultPath: path.join(session.target.projectDir, "build"),
     properties: ["openDirectory", "createDirectory"],
   });
   if (selected.canceled) return null;
-  // Each part gets its own directory so manifests for other exports survive.
-  const output_dir = path.join(selected.filePaths[0], name);
-  checkRevision(revision);
-  if (status.phase !== "ready")
+  checkRevision(session, revision);
+  if (session.status.phase !== "ready")
     throw new Error("The model changed while choosing an export destination");
-  const result = await current.call("export_part", {
+  const result = await session.current.call("export_part", {
     name,
-    output_dir,
+    output_dir: path.join(selected.filePaths[0], name),
     validation_override,
   });
+  checkRevision(session, revision);
   await shell.openPath(result.directory);
   return result;
 });
@@ -468,27 +897,6 @@ ipcMain.handle("cadkit:export", async (_event, name, validation_override) => {
 app
   .whenReady()
   .then(async () => {
-    slicer = new Slicer({
-      userData: app.getPath("userData"),
-      projectDir,
-      python,
-      env: workerEnv(),
-      publish,
-      exportParts: (revision, names, output_dir, validation_override) => {
-        checkRevision(revision);
-        if (status.phase !== "ready")
-          throw new Error(
-            "Wait for a successful current build before exporting",
-          );
-        return current.call("export_parts", {
-          revision,
-          names,
-          output_dir,
-          validation_override,
-        });
-      },
-    });
-    bridge = await startBridge(projectDir, reference, dispatch);
     window = new BrowserWindow({
       show: !smokeTest,
       width: 1500,
@@ -505,82 +913,69 @@ app
         sandbox: true,
       },
     });
-    window.webContents.on("did-start-loading", () => {
-      for (const pending of rendererRequests.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error("CadKit view reloaded"));
-      }
-      rendererRequests.clear();
-    });
+    window.webContents.on("did-start-loading", () =>
+      rejectControls("CadKit view reloaded"),
+    );
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     window.webContents.on("will-navigate", (event) => event.preventDefault());
+    const initial = resolveRuntime(runtimeOptions);
+    if (initial) {
+      const explicitPython = argument(process.argv, "--python");
+      await transition(() =>
+        activate({
+          projectDir: initial.projectDir,
+          reference: initial.reference,
+          python: explicitPython,
+        }),
+      );
+    } else await publishLauncher();
     await window.loadFile(path.join(desktop, "dist/index.html"));
-    if (smokeTest) {
-      const scene = snapshot ?? (await (building ?? rebuild()));
-      const deadline = Date.now() + 60000;
-      let ui;
-      do {
-        ui = await control("get_state");
-        if (ui.revision === scene.revision) break;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } while (Date.now() < deadline);
-      if (ui.revision !== scene.revision)
-        throw new Error("Packaged renderer did not load the CAD scene");
-      const report = {
+    if (!smokeTest) return;
+    const session = requireSession();
+    const scene =
+      session.snapshot ?? (await (session.building ?? rebuild(session)));
+    const deadline = Date.now() + 60000;
+    let ui;
+    do {
+      ui = await control(session, "get_state");
+      if (ui.revision === scene.revision) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } while (Date.now() < deadline);
+    if (ui.revision !== scene.revision)
+      throw new Error("Packaged renderer did not load the CAD scene");
+    if (!smokeOutput) throw new Error("--smoke-test requires --smoke-output");
+    writeFileSync(
+      smokeOutput,
+      JSON.stringify({
         packaged: app.isPackaged,
-        projectDir,
-        python,
+        projectDir: session.target.projectDir,
+        python: session.runtime.python,
         components: scene.components.length,
         workerRevision: scene.revision,
         rendererRevision: ui.revision,
-      };
-      if (!smokeOutput) throw new Error("--smoke-test requires --smoke-output");
-      writeFileSync(smokeOutput, JSON.stringify(report));
-      app.quit();
-      return;
-    }
-    watcher = chokidar.watch(
-      app.isPackaged ? [projectDir] : [projectDir, path.join(framework, "src")],
-      {
-        ignored: (file, stats) =>
-          /(?:^|[/\\])(?:\.git|\.venv|node_modules|__pycache__|build|dist|vendor|archive)(?:[/\\]|$)/.test(
-            file,
-          ) || Boolean(stats?.isFile() && !file.endsWith(".py")),
-        ignoreInitial: true,
-        awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
-      },
+      }),
     );
-    watcher.on("all", (_event, file) => {
-      if (!file.endsWith(".py")) return;
-      clearTimeout(debounce);
-      debounce = setTimeout(() => {
-        void rebuild().catch(() => {});
-      }, 500);
-    });
+    app.quit();
   })
   .catch((error) => {
     if (smokeTest) {
       if (smokeOutput)
         writeFileSync(smokeOutput, JSON.stringify({ error: error.message }));
-      current?.close();
-      candidate?.close();
+      active?.current?.close();
+      active?.candidate?.close();
       app.exit(1);
       return;
     }
-    dialog.showErrorBox("CadKit could not start", error.message);
-    app.quit();
+    // Keep Home usable even if an explicit CLI project cannot be opened.
+    dialog.showErrorBox("CadKit could not open the project", error.message);
+    void stopSession().finally(async () => {
+      await publishLauncher();
+      if (window && !window.isDestroyed())
+        await window.loadFile(path.join(desktop, "dist/index.html"));
+    });
   });
 app.on("window-all-closed", () => app.quit());
 app.on("before-quit", () => {
-  clearTimeout(debounce);
-  void watcher?.close();
-  current?.close();
-  candidate?.close();
-  slicer?.close();
-  void bridge?.close();
-  for (const pending of rendererRequests.values()) {
-    clearTimeout(pending.timer);
-    pending.reject(new Error("CadKit closed"));
-  }
-  rendererRequests.clear();
+  void stopSession().catch(() => {});
+  rejectControls("CadKit closed");
 });

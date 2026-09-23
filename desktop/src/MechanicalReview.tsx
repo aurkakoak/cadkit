@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Download, X } from "lucide-react";
-import { FindingList } from "./ConnectionsPanel";
-import type { MechanicalReport } from "./types";
+import { FindingList, ValidationCoverage } from "./ValidationPanel";
+import type { MechanicalReport, Snapshot } from "./types";
 
 export function MechanicalReview({
   report,
   part,
+  scene,
   onProceed,
   onClose,
 }: {
   report: MechanicalReport;
   part: string;
+  scene?: Snapshot;
   onProceed: (reason?: string) => void;
   onClose: () => void;
 }) {
@@ -32,11 +34,9 @@ export function MechanicalReview({
       <strong>{part}</strong>
       <FindingList
         findings={report.findings.filter((f) => f.status !== "pass")}
+        scene={scene}
       />
-      <details className="validation-coverage">
-        <summary>Coverage · installed pose</summary>
-        <pre>{JSON.stringify(report.coverage, null, 2)}</pre>
-      </details>
+      <ValidationCoverage report={report} />
       {failed && (
         <label className="validation-override">
           Proceeding despite failed checks

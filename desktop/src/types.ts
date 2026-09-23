@@ -146,18 +146,66 @@ export interface Status {
   phase: "idle" | "building" | "ready" | "error";
   message: string;
 }
+export interface ProjectTarget {
+  projectDir: string;
+  reference: string;
+  python?: string;
+}
+export interface RecentProject extends ProjectTarget {
+  id: string;
+  name: string;
+  lastOpened: string;
+  pinned: boolean;
+  thumbnail?: string;
+  missing: boolean;
+}
+export interface ProjectChoice {
+  directory: string;
+  entries: (ProjectTarget & { label: string; file?: string })[];
+  warnings?: string[];
+  suggestedPython?: string;
+  replaceRecentId?: string;
+}
+export interface ProjectSession extends ProjectTarget {
+  id: string;
+  sessionId: string;
+}
+export interface LauncherState {
+  active: ProjectSession | null;
+  recents: RecentProject[];
+}
 export type AppEvent =
-  | ({ type: "status" } & Status)
-  | { type: "scene"; scene: Snapshot }
-  | { type: "slice"; job: SliceJob };
+  | ({ type: "status"; sessionId?: string } & Status)
+  | { type: "scene"; scene: Snapshot; sessionId?: string }
+  | { type: "slice"; job: SliceJob; sessionId?: string }
+  | { type: "launcher"; state: LauncherState }
+  | { type: "open-project"; choice?: ProjectChoice };
 declare global {
   interface Window {
     cadkit: {
+      launcherState(): Promise<LauncherState>;
+      chooseProject(): Promise<ProjectChoice | null>;
+      openProject(
+        target: ProjectTarget & { replaceRecentId?: string },
+      ): Promise<LauncherState>;
+      closeProject(): Promise<LauncherState>;
+      createProject(
+        template: "starter" | "bracket",
+      ): Promise<LauncherState | null>;
+      pinProject(id: string, pinned: boolean): Promise<LauncherState>;
+      removeProject(id: string): Promise<LauncherState>;
+      locateProject(id: string): Promise<ProjectChoice | null>;
+      pickProjectPython(): Promise<string | null>;
+      saveProjectPreview(params: {
+        revision: string;
+        manual?: boolean;
+      }): Promise<void>;
       load(): Promise<{
-        scene: Snapshot;
+        scene: Snapshot | null;
         status: Status;
-        projectDir: string;
-        reference: string;
+        projectDir: string | null;
+        reference: string | null;
+        launcher: LauncherState;
       }>;
       rebuild(): Promise<Snapshot>;
       measure(params: {
@@ -186,6 +234,7 @@ declare global {
         callback: (request: {
           method: string;
           params: any;
+          sessionId?: string;
         }) => Promise<unknown>,
       ): () => void;
       onEvent(callback: (event: AppEvent) => void): () => void;

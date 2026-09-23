@@ -55,6 +55,7 @@ interface Props {
   onMoveAnnotation: (id: string, offset: [number, number]) => void;
   onPick: (id: string, multiple: boolean) => void;
   onError: (message: string) => void;
+  onReady?: (revision: string) => void;
 }
 
 export function Viewport(props: Props) {
@@ -103,6 +104,20 @@ export function Viewport(props: Props) {
     };
     return () => {
       props.api.current = null;
+    };
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() =>
+        latest.current.onReady?.(latest.current.scene.revision),
+      );
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
     };
   }, [ready]);
 

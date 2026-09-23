@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -11,12 +10,13 @@ import {
   Settings2,
   ShieldCheck,
 } from "lucide-react";
+import { FindingList } from "./ValidationPanel";
+import { componentLabel, formatNumber } from "./validation";
 import { AnnotationMarkdown } from "./AnnotationCard";
 import {
   connectionFindings,
   connectionKinds,
   connectionList,
-  findingCounts,
 } from "./mechanics";
 import type {
   Connection,
@@ -32,7 +32,8 @@ import type {
   Snapshot,
 } from "./types";
 
-const label = (text: string) => text.replace(/[-_]/g, " ");
+const label = (text: string) =>
+  text.replace(/[-_]/g, " ").replaceAll("/", " › ");
 const plural = {
   joint: "Joints",
   interface: "Interfaces",
@@ -257,6 +258,7 @@ export function ConnectionInspector({
   onPick,
   onSelect,
   onFocus,
+  onShowFinding,
   isolated,
 }: {
   connection: Connection;
@@ -266,6 +268,7 @@ export function ConnectionInspector({
   onPick: (id: string) => void;
   onSelect: (kind: ConnectionKind, id: string) => void;
   onFocus: () => void;
+  onShowFinding: (finding: MechanicalFinding) => void;
   isolated: boolean;
 }) {
   const joint = kind === "joint" ? (connection as Joint) : null;
@@ -302,9 +305,7 @@ export function ConnectionInspector({
           {connection.component_ids.map((id) => (
             <button key={id} title={id} onClick={() => onPick(id)}>
               <Eye size={13} />
-              <span>
-                {label(scene.components.find((c) => c.id === id)?.name ?? id)}
-              </span>
+              <span>{componentLabel(scene, id)}</span>
             </button>
           ))}
         </div>
@@ -322,9 +323,15 @@ export function ConnectionInspector({
           <h2>Joint</h2>
           <dl>
             <dt>Origin · mm</dt>
-            <dd>{joint.origin.join(", ")}</dd>
+            <dd>{joint.origin.map(formatNumber).join(", ")}</dd>
             <dt>Axis</dt>
-            <dd>{joint.axis.join(", ")}</dd>
+            <dd>
+              {joint.axis
+                .map((value) =>
+                  formatNumber(Math.abs(value) < 1e-10 ? 0 : value),
+                )
+                .join(", ")}
+            </dd>
             <dt>Position</dt>
             <dd>
               {joint.position}
@@ -488,11 +495,12 @@ export function ConnectionInspector({
         </details>
       )}
       <section className="detail-section">
-        <h2>Validation</h2>
+        <h2>This connection</h2>
         {findings.length ? (
           <FindingList
             findings={findings}
-            onPick={(f) => f.component_ids[0] && onPick(f.component_ids[0])}
+            scene={scene}
+            onPick={onShowFinding}
           />
         ) : (
           <span className="connection-empty">Not checked</span>
@@ -520,128 +528,4 @@ function ConnectionLinks({
       ))}
     </div>
   ) : null;
-}
-
-export function FindingList({
-  findings,
-  onPick,
-}: {
-  findings: MechanicalFinding[];
-  onPick?: (finding: MechanicalFinding) => void;
-}) {
-  return (
-    <div className="finding-list">
-      {findings.map((f) => (
-        <details key={f.id} className={`mechanical-finding ${f.status}`}>
-          <summary>
-            <span className={`connection-status ${f.status}`}>
-              {f.status === "fail" ? (
-                <AlertTriangle size={13} />
-              ) : f.status === "pass" ? (
-                <Check size={13} />
-              ) : (
-                <CircleDashed size={13} />
-              )}
-            </span>
-            <span>{f.message}</span>
-          </summary>
-          <div className="finding-detail">
-            <small>
-              {f.concept} · {f.entity} · {f.code}
-            </small>
-            {onPick && f.component_ids.length > 0 && (
-              <button className="quiet-button" onClick={() => onPick(f)}>
-                <Crosshair size={12} />
-                Show
-              </button>
-            )}
-            {Object.keys(f.evidence).length > 0 && (
-              <pre>{JSON.stringify(f.evidence, null, 2)}</pre>
-            )}
-          </div>
-        </details>
-      ))}
-    </div>
-  );
-}
-
-export function ValidationPanel({
-  report,
-  busy,
-  error,
-  onRun,
-  onPick,
-}: {
-  report: MechanicalReport | null;
-  busy: boolean;
-  error?: string;
-  onRun: () => void;
-  onPick?: (finding: MechanicalFinding) => void;
-}) {
-  const [showPassed, setShowPassed] = useState(false);
-  const counts = findingCounts(report?.findings ?? []);
-  return (
-    <section className="validation-panel" aria-label="Assembly validation">
-      <h2>
-        <ShieldCheck size={15} />
-        {report?.scope ? "Selected Part checks" : "Assembly checks"}
-        <button
-          title="Run checks against installed geometry"
-          aria-label="Run assembly checks"
-          onClick={onRun}
-          disabled={busy}
-        >
-          <RotateCcw size={13} />
-        </button>
-      </h2>
-      {busy ? (
-        <p className="connection-empty">Checking…</p>
-      ) : report ? (
-        <>
-          <div
-            className="validation-counts"
-            data-validation-status={report.status}
-          >
-            {counts.failed > 0 && (
-              <span className="fail">
-                <AlertTriangle size={13} />
-                {counts.failed} failed
-              </span>
-            )}
-            {counts.unverified > 0 && (
-              <span className="unverified">
-                <CircleDashed size={13} />
-                {counts.unverified} unverified
-              </span>
-            )}
-            <button
-              aria-pressed={showPassed}
-              onClick={() => setShowPassed(!showPassed)}
-            >
-              <Check size={13} />
-              {counts.passed} passed
-            </button>
-          </div>
-          <FindingList
-            findings={report.findings.filter(
-              (f) => showPassed || f.status !== "pass",
-            )}
-            onPick={onPick}
-          />
-          <details className="validation-coverage">
-            <summary>Coverage · installed pose</summary>
-            {report.scope && <p>{report.scope.parts.join(", ")}</p>}
-            <pre>{JSON.stringify(report.coverage, null, 2)}</pre>
-          </details>
-        </>
-      ) : (
-        <p className="connection-empty">Not checked</p>
-      )}
-      {error && (
-        <p className="inline-error" role="alert">
-          {error}
-        </p>
-      )}
-    </section>
-  );
 }
