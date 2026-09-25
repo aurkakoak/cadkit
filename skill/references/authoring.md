@@ -107,7 +107,10 @@ Use local `assembly.interface()` declarations for mechanical evidence where
 supported. Static `ck.Joint` records describe evidence; actual motion requires
 connections such as `ck.Revolute` and components attached to the moving unit.
 
-Nested assemblies publish ports for placement and selected leaves with
+Nested assemblies publish manufacturing features with `export_feature` for
+shared mounts across subsystem boundaries. The parent binds them through
+`nested_instance.feature(export_name)`, preserving feature and mount ownership.
+They publish ports for placement and selected leaves with
 `export_component` for contact or clearance. Declare cross-subsystem interfaces
 using `nested_instance.component(export_name)`. These references resolve through
 the instance's pose and can be re-exported by a containing assembly. They avoid

@@ -50,9 +50,10 @@ class Instance:
             (FeatureRef): Bound local datum and feature definition.
 
         Raises:
-            ValueError: The name is absent or the instance is a nested assembly.
+            ValueError: The feature is absent or is not exported by the nested assembly.
         """
-        if isinstance(self.part, Assembly) or key not in self.part.features:
+        features = self.part._exported_features if isinstance(self.part, Assembly) else self.part.features
+        if key not in features:
             raise ValueError(f"{self.name}: unknown feature {key!r}")
         return FeatureRef(self, key)
 
@@ -114,7 +115,10 @@ class PortRef:
 class FeatureRef(PortRef):
     @property
     def definition(self):
-        return self.instance.part.features[self.key]
+        part = self.instance.part
+        if isinstance(part, Assembly):
+            return part._exported_features[self.key].definition
+        return part.features[self.key]
 
 
 @dataclass(frozen=True, eq=False)
@@ -206,6 +210,7 @@ class Assembly:
         self._attachments = {}
         self._ports = {}
         self._exported_components = {}
+        self._exported_features = {}
         self._couplings = {}
         self._poses = {}
         self._interfaces = {}
@@ -231,6 +236,11 @@ class Assembly:
     def exported_components(self):
         """Read-only mapping of public component names to selected leaf references."""
         return MappingProxyType(self._exported_components)
+
+    @property
+    def exported_features(self):
+        """Read-only mapping of public feature names to owned feature references."""
+        return MappingProxyType(self._exported_features)
 
     def add(self, name=None, part=None, *, group=None, color=None, material=None, explode=(0, 0, 0)):
         """Add a named instance without placing it or building its geometry.
@@ -318,6 +328,38 @@ class Assembly:
             raise ValueError(f"Duplicate exported port {name!r}")
         self._ports[name] = ref
 
+    def _feature_path(self, ref):
+        """Resolve an owned feature reference to its definition-relative leaf path."""
+        self._ref(ref)
+        if not isinstance(ref, FeatureRef):
+            raise TypeError("Use instance.feature(name) as a manufacturing feature")
+        instance = ref.instance
+        instance.feature(ref.key)  # Validate even a directly constructed reference.
+        if isinstance(instance.part, Assembly):
+            target = instance.part._exported_features[ref.key]
+            return _path(instance.name, instance.part._feature_path(target))
+        return instance.name
+
+    def export_feature(self, name, ref):
+        """Expose an owned manufacturing feature for a containing assembly's mount.
+
+        Args:
+            name (str): Unique public feature name.
+            ref (FeatureRef): Owned leaf feature or an owned nested instance's
+                exported feature, obtained with `instance.feature(name)`.
+
+        The containing assembly uses `instance.feature(name)` in `connect`,
+        `fasten` or `attach`. Re-exporting preserves the original feature and
+        shared mount object; its datum follows this occurrence's nested pose.
+        Only the selected leaf participates in the resolved fastening contract.
+        Export a port separately when only a placement datum is needed.
+        """
+        valid_name(name)
+        if name in self._exported_features:
+            raise ValueError(f"Duplicate exported feature {name!r}")
+        self._feature_path(ref)
+        self._exported_features[name] = ref
+
     def _component_path(self, component):
         """Validate a local participant and return its definition-relative leaf path."""
         if isinstance(component, Instance):
@@ -403,12 +445,12 @@ class Assembly:
                 feature = ref.definition
                 if getattr(feature, "mount", None) is not relationship or getattr(feature, "role", None) != role:
                     raise ValueError(f"{ref.instance.name}/{ref.key} must bind this mount's {role} side")
-            if len({id(ref.instance) for ref in (through, into, *via)}) != 2 + len(via):
+            if len({self._feature_path(ref) for ref in (through, into, *via)}) != 2 + len(via):
                 raise ValueError("A connection needs distinct participating instances")
             if hasattr(relationship, "validate_stack"):
                 relationship.validate_stack(through.definition, tuple(ref.definition for ref in via))
             connection = Connection(name, relationship, through, into, fastening_name, place, tuple(via))
-        if connection.parent.instance is connection.child.instance:
+        if place and connection.parent.instance is connection.child.instance:
             raise ValueError("A connection needs two distinct instances")
         if place and self._parented(connection.child.instance):
             raise ValueError(f"{connection.child.instance.name} already has a placement")
@@ -690,14 +732,15 @@ class Assembly:
         return result
 
     def _frame(self, ref, prefix, positions):
-        if isinstance(ref, FeatureRef):
-            return ref.definition.at.location
         definition = ref.instance.part
         if isinstance(definition, Assembly):
             inner_prefix = _path(prefix, ref.instance.name)
-            inner = definition._ports[ref.key]
+            exports = definition._exported_features if isinstance(ref, FeatureRef) else definition._ports
+            inner = exports[ref.key]
             locations = definition._locations(inner_prefix, positions)
             return locations[inner.instance.name] * definition._frame(inner, inner_prefix, positions)
+        if isinstance(ref, FeatureRef):
+            return ref.definition.at.location
         frame = definition.ports[ref.key]
         if not isinstance(frame, Frame):
             raise TypeError("Part ports must be local Frames")
@@ -943,6 +986,9 @@ class Assembly:
                 "fixed": {name: frame.describe() for name, frame in self._fixed.items()},
                 "ports": {name: {"instance": ref.instance.name, "port": ref.key,
                                   "feature": isinstance(ref, FeatureRef)} for name, ref in self._ports.items()},
+                "exported_features": {name: {"instance": ref.instance.name, "feature": ref.key,
+                                              "component": self._feature_path(ref)}
+                                      for name, ref in self._exported_features.items()},
                 "exported_components": {name: self._component_path(component)
                                         for name, component in self._exported_components.items()},
                 "connections": {name: self._describe_connection(c) for name, c in self._connections.items()},
@@ -985,6 +1031,7 @@ class Assembly:
             return ref(value) if isinstance(value, ComponentRef) else replacements[id(value)]
         frozen._fixed = dict(self._fixed)
         frozen._ports = {key: ref(value) for key, value in self._ports.items()}
+        frozen._exported_features = {key: ref(value) for key, value in self._exported_features.items()}
         frozen._exported_components = {key: component(value) for key, value in self._exported_components.items()}
         for name, connection in self._connections.items():
             if isinstance(connection, Connection):
@@ -1110,7 +1157,7 @@ class Resolution:
                 features = {key:ref.definition for key,ref in attachment.features.items()}
                 frames = {key:Frame.from_location(world * local[ref.instance.name]
                           * assembly._frame(ref,prefix,self.positions)) for key,ref in attachment.features.items()}
-                components = tuple(dict.fromkeys(self._id(_path(prefix,ref.instance.name))
+                components = tuple(dict.fromkeys(self._id(_path(prefix, assembly._feature_path(ref)))
                                    for ref in attachment.features.values()))
                 yield _path(prefix,name),attachment,features,frames,components
 
@@ -1123,12 +1170,12 @@ class Resolution:
                     continue
                 frame = Frame.from_location(world * local[connection.into.instance.name]
                                             * assembly._frame(connection.into, prefix, self.positions))
-                options = {"through": self._id(_path(prefix, connection.through.instance.name)),
-                           "into": self._id(_path(prefix, connection.into.instance.name)),
+                options = {"through": self._id(_path(prefix, assembly._feature_path(connection.through))),
+                           "into": self._id(_path(prefix, assembly._feature_path(connection.into))),
                            "frame": frame, "clearance": connection.through.definition,
                            "joint": _path(prefix, connection.name)}
                 if connection.via:
-                    options["via"] = tuple(self._id(_path(prefix, ref.instance.name)) for ref in connection.via)
+                    options["via"] = tuple(self._id(_path(prefix, assembly._feature_path(ref))) for ref in connection.via)
                 fastening = connection.mount.fastening(_path(prefix, connection.fastening_name), **options)
                 access = tuple(AccessEnvelope(
                     value.name,
@@ -1147,11 +1194,14 @@ class Resolution:
                 refs = tuple(dict.fromkeys((*self._refs(prefix, connection.parent.instance),
                                             *self._refs(prefix, connection.child.instance))))
                 if isinstance(connection, Connection):
-                    refs = tuple(dict.fromkeys((*refs, *(ref for middle in connection.via for ref in self._refs(prefix, middle.instance)))))
+                    parent_refs = (self._id(_path(prefix, assembly._feature_path(connection.into))),)
+                    child_refs = (self._id(_path(prefix, assembly._feature_path(connection.through))),)
+                    middle_refs = tuple(self._id(_path(prefix, assembly._feature_path(ref))) for ref in connection.via)
+                    refs = tuple(dict.fromkeys((*parent_refs, *child_refs, *middle_refs)))
                     result.append(Joint(_path(prefix, name), refs, origin=frame.origin, axis=frame.z,
                                         fastenings=(_path(prefix, connection.fastening_name),),
-                                        parent_components=self._refs(prefix, connection.parent.instance),
-                                        child_components=self._refs(prefix, connection.child.instance)))
+                                        parent_components=parent_refs,
+                                        child_components=child_refs))
                 else:
                     result.append(Joint(_path(prefix, name), refs, kind=connection.motion.kind,
                                         origin=frame.origin, axis=frame.z,
@@ -1181,7 +1231,7 @@ class Resolution:
                     result.extend(connection.mount.interfaces(
                         fastenings[_path(prefix, connection.fastening_name)], receiver=connection.into.definition,
                         hardware_root=hardware_root,
-                        receiver_representation=getattr(connection.into.instance.part, "representation", None)))
+                        receiver_representation=getattr(self.leaves[_path(prefix, assembly._feature_path(connection.into))][0].part, "representation", None)))
         return tuple(result)
 
     def _native_components(self, *, kind=None):

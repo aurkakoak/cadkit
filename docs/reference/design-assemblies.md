@@ -39,6 +39,8 @@ own groups when their containing instance has no group override.
         - add
         - fix
         - export_port
+        - export_feature
+        - exported_features
         - export_component
         - exported_components
         - connect
@@ -67,8 +69,8 @@ own groups when their containing instance has no group override.
 
 Get an Instance from `assembly.add(...)`. A leaf instance exposes its local
 `feature()` and `port()` references. A nested instance exposes the definition's
-exported ports through `port()` and its exported contact participants through
-`component()`. Each reference is bound to that installed occurrence.
+exported ports through `port()`, manufacturing features through `feature()`, and
+contact participants through `component()`. Each reference is bound to that installed occurrence.
 
 ::: cadkit.Instance
     options:
@@ -80,6 +82,37 @@ exported ports through `port()` and its exported contact participants through
         - feature
         - port
         - component
+
+## Fasten across subsystems
+
+Publish an owned manufacturing feature when a parent needs to bind a shared
+mount across the subsystem boundary:
+
+```python
+unit.export_feature("mount", housing.feature("mount"))
+head = machine.add("head", unit)
+machine.connect("head-mount", mount,
+                through=head.feature("mount"), into=arm.feature("mount"))
+```
+
+Both roles must use the same mount object. The exported reference retains the
+leaf's original feature, including its local datum, layer dimensions and
+manufacturing operations. It follows the installed occurrence's nested placement
+and pose; generated hardware, fit interfaces and driver access use that same
+resolved datum. Fastening participants identify only the selected leaves.
+
+Re-export a nested feature with `unit.export_feature(name, nested.feature(key))`.
+Export names are unique; `exported_features` provides a read-only mapping.
+Use `fasten` when both participants already have placement parents, or `attach`
+for a feature-bound hardware recipe. Intermediate stack roles can also be
+exported and passed as `via=`. Distinct roles in one stack must identify distinct
+leaves, even when exported under different names. A placing connection still
+requires distinct immediate parent and child instances.
+
+Secondary fastenings require all role datums to coincide in the selected pose.
+The viewer disables motion whose additional fastening constraints cannot be
+represented by the placement graph. A Python pose resolves and validates those
+constraints. Exporting a feature does not change or duplicate its geometry.
 
 ## Contact participants across subsystems
 

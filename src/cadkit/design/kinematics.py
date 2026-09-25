@@ -83,14 +83,16 @@ def motion_graph(resolution):
         return product(parent, datum, movement, inverse(port(prefix, connection.child)))
 
     def port(prefix, ref):
-        if isinstance(ref, FeatureRef):
-            return constant(ref.definition.at.location)
         if isinstance(ref.instance.part, Assembly):
             inner_prefix = _path(prefix, ref.instance.name)
-            inner = ref.instance.part._ports[ref.key]
+            exports = (ref.instance.part._exported_features if isinstance(ref, FeatureRef)
+                       else ref.instance.part._ports)
+            inner = exports[ref.key]
             return product(
                 local(inner_prefix, inner.instance.name), port(inner_prefix, inner)
             )
+        if isinstance(ref, FeatureRef):
+            return constant(ref.definition.at.location)
         return constant(ref.instance.part.ports[ref.key].location)
 
     @lru_cache(None)
@@ -128,7 +130,7 @@ def motion_graph(resolution):
                 if not connection.placing:
                     # Secondary fastenings constrain the pose beyond the placement tree.
                     sides = [
-                        dependencies[world(_path(prefix, ref.instance.name))]
+                        dependencies[product(world(_path(prefix, ref.instance.name)), port(prefix, ref))]
                         for ref in (
                             connection.through,
                             connection.into,
