@@ -5,6 +5,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rename,
   rm,
   symlink,
@@ -27,7 +28,11 @@ const png = Buffer.from(
 );
 
 async function fixture(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "cadkit projects "));
+  // macOS temporary directories can be reached through /var -> /private/var.
+  // Identity and discovery return canonical paths, so expectations must too.
+  const root = await realpath(
+    await mkdtemp(path.join(os.tmpdir(), "cadkit projects ")),
+  );
   t.after(() => rm(root, { recursive: true, force: true }));
   const options = {
     userData: path.join(root, "profile"),
