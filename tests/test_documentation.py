@@ -134,6 +134,7 @@ def documentation_tools(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "sync_skill", references)
     site = load_script("build_site")
     write(tmp_path, "site/assets/mark.svg", "<svg/>")
+    write(tmp_path, "LICENSE", "Fixture licence\n")
     return references, site
 
 

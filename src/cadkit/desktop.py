@@ -62,7 +62,7 @@ class Session:
             from ocp_tessellate.convert import to_ocpgroup, tessellate_group
         except ImportError as exc:
             raise RuntimeError(
-                "Install CadKit's desktop extra in this Python environment: pip install -e '../cadkit[desktop]'"
+                "Install CadKit's desktop extra in this Python environment: pip install 'cadkit-py[desktop]'"
             ) from exc
 
         started = time.monotonic()

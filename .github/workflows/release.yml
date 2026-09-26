@@ -6,7 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish this version after all native builds pass
+        description: Publish this version after checks pass
+        type: boolean
+        default: false
+      python_only:
+        description: Build only the Python package and skill (skip desktop installers)
         type: boolean
         default: false
 
@@ -22,6 +26,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   package:
+    if: ${{ !inputs.python_only }}
     needs: checks
     strategy:
       fail-fast: false
@@ -125,7 +130,9 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: '0.12.9'
-      - run: uv build
+      - run: uv build --no-sources
+      - run: uvx --from 'twine>=6,<7' twine check --strict dist/*
+      - run: uv run --no-project --python 3.12 python scripts/check_distribution.py
       - run: uv run --no-project python scripts/sync_skill.py --check
       - run: uv run --no-project python scripts/release_metadata.py --skill dist
       - uses: actions/upload-artifact@v4
@@ -135,7 +142,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish && !inputs.python_only)
     needs: [package, python-and-skill]
     runs-on: ubuntu-24.04
     permissions:
@@ -179,3 +186,27 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" dist/*
           gh release edit "$RELEASE_TAG" --draft=false --latest
+
+  publish-pypi:
+    needs: [checks, python-and-skill, publish]
+    if: >-
+      ${{ !cancelled() && needs.checks.result == 'success' &&
+      needs['python-and-skill'].result == 'success' &&
+      (needs.publish.result == 'success' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish && inputs.python_only)) }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/cadkit-py/
+    permissions:
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.9'
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-and-skill
+          path: dist
+      - name: Publish Python distributions
+        run: uv publish --trusted-publishing always dist/cadkit_py-*.whl dist/cadkit_py-*.tar.gz

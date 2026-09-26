@@ -1,6 +1,6 @@
 # CadKit
 
-![CadKit desktop showing a CAD model](docs/assets/cadkit-desktop.png)
+![CadKit desktop showing a CAD model](https://raw.githubusercontent.com/aurkakoak/cadkit/main/docs/assets/cadkit-desktop.png)
 
 ```python
 # project.py
@@ -40,7 +40,7 @@ PROJECT = assembly.as_project()
 
 CadKit favours explicit design intent: named inputs drive local parts, parts own
 their manufacturing definitions, and assemblies own placement and relationships.
-The [project-structure guide](docs/explanation/project-structure.md) shows how to
+The [project-structure guide](https://aurkakoak.github.io/cadkit/docs/explanation/project-structure/) shows how to
 grow this into cohesive modules, with a runnable example and supported escape hatches.
 
 ## Install
@@ -63,10 +63,14 @@ Unsigned builds may show a macOS security warning.
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.6.0"
+uv add cadkit-py
 # Save the example above as project.py.
 uv run cadkit --project project:PROJECT build all
 ```
+
+To use this project's Python environment in the desktop app, install
+`uv add 'cadkit-py[desktop]'`. The extra supplies Python viewer dependencies;
+install the Electron app separately using the instructions above.
 
 **Agent skill:**
 
@@ -75,4 +79,11 @@ npx skills add aurkakoak/cadkit --skill cadkit
 ```
 
 [Documentation](https://aurkakoak.github.io/cadkit/docs/) ·
-[Run from source](docs/how-to/install.md) · [Release process](docs/contributing/releases.md)
+[Run from source](https://aurkakoak.github.io/cadkit/docs/how-to/install/) · [Release process](https://aurkakoak.github.io/cadkit/docs/contributing/releases/)
+
+## Licence
+
+CadKit's original code and documentation are licensed under
+[Apache-2.0](https://github.com/aurkakoak/cadkit/blob/main/LICENSE).
+Bundled third-party code retains its own copyright notices and licences;
+the included cq_warehouse fastener code is also Apache-2.0.

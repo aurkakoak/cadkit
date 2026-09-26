@@ -66,7 +66,7 @@ def main():
         root.mkdir()
         package = staging / "package"
         package.mkdir()
-        for name in ("README.md", "PROVENANCE.md"):
+        for name in ("README.md", "PROVENANCE.md", "LICENSE"):
             shutil.copy2(source / name, root / name)
             shutil.copy2(source / name, package / name)
         text = (source / "pyproject.toml").read_text()

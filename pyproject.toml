@@ -3,21 +3,31 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cadkit"
-version = "0.6.0"
+name = "cadkit-py"
+version = "0.6.1"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "src/cadkit/_vendor/cq_warehouse/LICENSE"]
 description = "Inspectable CadQuery projects: model, validate, preview, render, and slice"
 requires-python = ">=3.11"
 dependencies = [
     "cadquery==2.8.0",
-    "cq_warehouse @ git+https://github.com/gumyr/cq_warehouse.git@daa46507ecc429c0e2dce11d9d5ffd09b12a42af",
     "trimesh>=4.7,<6",
     "manifold3d>=3,<4",
     # Newer versions dropped Intel Mac wheels. Keep the recommended Python
     # interpreter installable in consumer projects as well as release builds.
     "nlopt<2.10; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
+    # Keep the Intel Mac fallback out of other consumers' environments. Older
+    # nlopt lacks Linux ARM and Python 3.14 wheels, even on a universal uv lock.
+    "nlopt>=2.11; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "numba<0.63; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
 ]
+
+[project.urls]
+Homepage = "https://aurkakoak.github.io/cadkit/"
+Documentation = "https://aurkakoak.github.io/cadkit/docs/"
+Repository = "https://github.com/aurkakoak/cadkit"
+Issues = "https://github.com/aurkakoak/cadkit/issues"
 
 [project.optional-dependencies]
 desktop = ["ocp-tessellate==3.5.0"]
@@ -38,6 +48,9 @@ cadkit-slice-build = "cadkit.slice_build:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"cadkit._vendor.cq_warehouse" = ["*.csv", "LICENSE", "README.md"]
 
 [tool.uv]
 # These native dependencies must use wheels on every release target.

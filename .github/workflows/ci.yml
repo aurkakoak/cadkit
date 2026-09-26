@@ -14,6 +14,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  python-distribution:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python: '3.11'
+          - os: ubuntu-24.04
+            python: '3.12'
+          - os: ubuntu-24.04
+            python: '3.13'
+          - os: ubuntu-24.04
+            python: '3.14'
+          - os: ubuntu-24.04-arm
+            python: '3.12'
+          - os: macos-15
+            python: '3.12'
+          - os: macos-15-intel
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.9'
+          enable-cache: true
+      - run: uv build --no-sources
+      - run: uvx --from 'twine>=6,<7' twine check --strict dist/*
+      - run: uv run --no-project --python 3.12 python scripts/check_distribution.py --python '${{ matrix.python }}'
+
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

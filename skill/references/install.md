@@ -77,10 +77,13 @@ and create a project environment:
 ```sh
 uv init --python 3.12 my-cad-project
 cd my-cad-project
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.6.0"
+uv add cadkit-py
 # Add your project.py, then:
 uv run cadkit --project project:PROJECT build all
 ```
+
+For desktop inspection using this environment, run `uv add 'cadkit-py[desktop]'`.
+This installs Python viewer dependencies; the Electron app is installed separately.
 
 Install the agent instructions from your project directory:
 
@@ -203,8 +206,8 @@ desktop reference supplied with the release for the next steps.
 ## Development source selected by a consumer
 
 Follow the consumer setup when it explicitly selects a CadKit source checkout
-(e.g. `CADKIT_SOURCE`). Install that checkout with its pinned
-cq_warehouse dependency and use its matching desktop source. A receipt for an
+(e.g. `CADKIT_SOURCE`). Install that checkout and use its matching desktop
+source. Its fastener catalogue is bundled in the Python package. A receipt for an
 older trial is historical provenance, not a command to downgrade the active
 source integration. Keep frozen trial bundles unchanged.
 
@@ -222,7 +225,9 @@ uv build
 
 uv selects Python 3.12 from `.python-version`, downloads it when needed, and
 creates `.venv` with CadKit installed in editable mode. The committed `uv.lock`
-records exact dependency versions, including the cq_warehouse Git revision.
+records exact dependency versions. The pinned cq_warehouse fastener code and
+catalogue data are bundled privately inside CadKit; their source revision and
+licence are recorded in `src/cadkit/_vendor/cq_warehouse/README.md`.
 Use `uv lock` after an intentional dependency change and commit the resulting
 lockfile. The `--locked` flag makes CI fail when the lockfile needs updating.
 

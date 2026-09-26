@@ -39,7 +39,7 @@ module.exports = async ({ packager, electronPlatformName, arch }) => {
     [
       "-I",
       "-c",
-      "import json, importlib.metadata, cadkit; print(json.dumps({'distribution': importlib.metadata.version('cadkit'), 'module': cadkit.__version__}))",
+      "import json, importlib.metadata, cadkit; print(json.dumps({'distribution': importlib.metadata.version('cadkit-py'), 'module': cadkit.__version__}))",
     ],
     {
       encoding: "utf8",

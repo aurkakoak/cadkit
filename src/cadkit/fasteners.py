@@ -108,10 +108,7 @@ class FastenerSpec:
         if self.factory is not None:
             result = self.factory(self)
         else:
-            try:
-                from cq_warehouse import fastener
-            except ImportError as exc:
-                raise RuntimeError("Install CadKit's pinned cq_warehouse dependency to build hardware") from exc
+            from ._vendor.cq_warehouse import fastener
             cls = getattr(fastener, _CLASSES[self.kind][0])
             kwargs = {"size": self.size, "fastener_type": self.standard}
             if self.kind != "plain_washer":

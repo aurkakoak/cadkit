@@ -231,14 +231,14 @@ wheels = [
 ]
 
 [[package]]
-name = "cadkit"
-version = "0.6.0"
+name = "cadkit-py"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "cadquery" },
-    { name = "cq-warehouse" },
     { name = "manifold3d" },
     { name = "nlopt", version = "2.9.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "nlopt", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "numba", version = "0.62.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "trimesh" },
 ]
@@ -262,8 +262,8 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "cadquery", specifier = "==2.8.0" },
-    { name = "cq-warehouse", git = "https://github.com/gumyr/cq_warehouse.git?rev=daa46507ecc429c0e2dce11d9d5ffd09b12a42af" },
     { name = "manifold3d", specifier = ">=3,<4" },
+    { name = "nlopt", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'", specifier = ">=2.11" },
     { name = "nlopt", marker = "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "<2.10" },
     { name = "numba", marker = "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "<0.63" },
     { name = "ocp-tessellate", marker = "extra == 'desktop'", specifier = "==3.5.0" },
@@ -710,11 +710,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d8/b1/bc774d9d200cfc4f073bba78b1bb1cb3b55bf1c8c345eae41fc2db510459/contourpy-1.4.0-cp315-cp315t-win_amd64.whl", hash = "sha256:de503609fdb71f597634ca64fb4bd2f13d27c97f140e912b1e8ed93544840df0", size = 262450, upload-time = "2026-09-11T19:04:49.502Z" },
     { url = "https://files.pythonhosted.org/packages/54/bf/eb4ff492e1c3d027617b5a20e4e6d63a035b41b8cf77a95950159556a3a5/contourpy-1.4.0-cp315-cp315t-win_arm64.whl", hash = "sha256:78ed5c5f962b3e156109f0531b174a65ba80d13cc681a70227b12524c162e184", size = 587064, upload-time = "2026-09-11T19:04:51.148Z" },
 ]
-
-[[package]]
-name = "cq-warehouse"
-version = "0.8.0"
-source = { git = "https://github.com/gumyr/cq_warehouse.git?rev=daa46507ecc429c0e2dce11d9d5ffd09b12a42af#daa46507ecc429c0e2dce11d9d5ffd09b12a42af" }
 
 [[package]]
 name = "cycler"

@@ -31,8 +31,8 @@ def test_all_installer_checksums_cover_actual_content(tmp_path):
     names = [f"CadKit-0.2.0-macos-{arch}.{extension}"
              for arch in ("arm64", "x64") for extension in ("dmg", "zip")]
     names += [f"CadKit-0.2.0-linux-{arch}.tar.gz" for arch in ("arm64", "x64")]
-    names += ["cadkit-0.2.0-py3-none-any.whl",
-              "cadkit-0.2.0.tar.gz", "cadkit-skill-0.2.0.zip"]
+    names += ["cadkit_py-0.2.0-py3-none-any.whl",
+              "cadkit_py-0.2.0.tar.gz", "cadkit-skill-0.2.0.zip"]
     for name in names:
         (tmp_path / name).write_bytes(name.encode())
     release.prepare_assets(tmp_path, "0.2.0")

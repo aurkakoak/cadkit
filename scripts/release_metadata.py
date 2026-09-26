@@ -26,8 +26,8 @@ def prepare_assets(directory: Path, release_version: str) -> None:
     expected = [f"CadKit-{release_version}-macos-{arch}.{extension}"
                 for arch in ("arm64", "x64") for extension in ("dmg", "zip")]
     expected += [f"CadKit-{release_version}-linux-{arch}.tar.gz" for arch in ("arm64", "x64")]
-    expected += [f"cadkit-{release_version}-py3-none-any.whl",
-                 f"cadkit-{release_version}.tar.gz", f"cadkit-skill-{release_version}.zip"]
+    expected += [f"cadkit_py-{release_version}-py3-none-any.whl",
+                 f"cadkit_py-{release_version}.tar.gz", f"cadkit-skill-{release_version}.zip"]
     missing = [name for name in expected if not (directory / name).is_file()]
     if missing:
         raise ValueError(f"Release incomplete; missing assets: {', '.join(missing)}")

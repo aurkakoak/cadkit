@@ -18,8 +18,10 @@ npm run test:runtime
 npm run build
 ```
 
-`uv.lock` records Python dependencies for all supported platforms, including
-the fixed cq_warehouse Git revision. `.python-version` selects Python 3.12.
+`uv.lock` records Python dependencies for all supported platforms.
+The cq_warehouse fastener code and catalogue data are bundled privately at a
+fixed revision; see `src/cadkit/_vendor/cq_warehouse/README.md` for provenance
+and update instructions. `.python-version` selects Python 3.12.
 Use `uv lock --upgrade` deliberately, then test all release targets. Intel Mac
 wheels for numerical dependencies need particular care. The consumer package
 still supports Python 3.11 and later; uv is the repository's development and
@@ -28,6 +30,40 @@ release tool, not a requirement imposed on callers of the Python package.
 CI runs Python tests, desktop/MCP integration tests, runtime-selection tests,
 skill validation and a strict documentation build. Package builds run the
 Python tests again on each native operating system and architecture.
+
+## Check Python distributions
+
+```sh
+uv build --no-sources
+uvx --from 'twine>=6,<7' twine check --strict dist/*.whl dist/*.tar.gz
+uv run --no-project python scripts/check_distribution.py
+```
+
+The installation check creates a fresh consumer project for each wheel and
+source archive, installs it with `uv add`, builds catalogue hardware without
+the external cq_warehouse package, and exports a model using the installed CLI.
+CI runs these checks on all four release platforms with Python 3.12, plus
+Linux x64 with Python 3.11, 3.13 and 3.14. Use `--python 3.11` to select another interpreter.
+
+## Configure PyPI once
+
+Create a PyPI account with two-factor authentication and add a pending Trusted
+Publisher for a new project at <https://pypi.org/manage/account/publishing/>:
+
+- Project: `cadkit-py`
+- Owner: `aurkakoak`
+- Repository: `cadkit`
+- Workflow: `release.yml`
+- Environment: `pypi`
+
+Create the matching `pypi` environment in the repository's GitHub settings.
+If the PyPI project already exists, its owner must add this publisher in the
+project settings instead. A pending publisher does not reserve the name.
+No long-lived PyPI token is needed. CadKit's original code is licensed under
+Apache-2.0; distributions include the licence and retain bundled third-party notices.
+
+The PyPI distribution is named `cadkit-py`; the Python import, CLI command,
+GitHub repository and skill remain `cadkit`.
 
 ## Build installers
 
@@ -77,8 +113,8 @@ npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
 4. Push a tag matching the version:
 
    ```sh
-   git tag v0.6.0
-   git push origin main v0.6.0
+   git tag v0.6.1
+   git push origin main v0.6.1
    ```
 
 The Release workflow tests the code, builds all four native targets, launches
@@ -89,18 +125,32 @@ unpublished; remove that incomplete draft before rerunning the publish job.
 Do not move a published version tag to new code; release a new patch version.
 
 Manual **Run workflow** builds downloadable Actions artifacts by default. Select
-**Publish this version after all native builds pass** to create a new version
+**Publish this version after checks pass** to create a new version
 tag and release from the tested commit after every build passes. This option
 rejects an existing version tag; use the tag-triggered workflow or a new version
-instead. Python distributions are attached to GitHub Releases; this workflow
-does not publish to PyPI or npm.
+instead. After the GitHub release is published, `publish-pypi` uploads the same
+tested wheel and source archive to PyPI using Trusted Publishing. The skill
+archive and desktop installers are not sent to PyPI. This makes `uv add cadkit-py`
+available; the workflow does not publish to npm.
+
+For a Python-only release, select both **Publish this version after checks pass** and **Build only the Python package and skill**. CI still runs,
+including installation checks on every supported release platform. The workflow
+publishes the Python distributions from the selected commit without building or
+publishing desktop installers or creating a GitHub release/tag. Choose a new
+version for subsequent releases, including the next desktop release; do not
+rebuild and overwrite a Python version already published to PyPI.
+
+If PyPI publishing fails, the GitHub release remains published. Fix the publisher
+configuration and rerun only the failed job. `uv publish` skips identical files
+already uploaded, allowing recovery from a partially completed upload. Do not
+replace an uploaded distribution with changed contents under the same version.
 
 Expected assets:
 
 - `CadKit-VERSION-macos-arm64.dmg` and `.zip`
 - `CadKit-VERSION-macos-x64.dmg` and `.zip`
 - `CadKit-VERSION-linux-x64.tar.gz` and `CadKit-VERSION-linux-arm64.tar.gz`
-- `cadkit-VERSION-py3-none-any.whl` and `cadkit-VERSION.tar.gz`
+- `cadkit_py-VERSION-py3-none-any.whl` and `cadkit_py-VERSION.tar.gz`
 - `cadkit-skill-VERSION.zip` and `SHA256SUMS`
 
 ## Code signing

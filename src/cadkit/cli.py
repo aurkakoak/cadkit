@@ -186,7 +186,13 @@ def main(argv=None, *, project=None):
                 command += ["--animation"]
             subprocess.run(command, check=True)
             return 0
-        project = project or load_project(args.project)
+        if project is None:
+            # Console scripts start with the environment's bin directory on
+            # sys.path. Models (including lazy imports) live in the caller's cwd.
+            project_root = str(Path.cwd())
+            if project_root not in sys.path:
+                sys.path.insert(0, project_root)
+            project = load_project(args.project)
         if args.command in {"mechanics", "bom"}:
             descriptions = project.mechanical_descriptions(assembly=project.get_assembly())
             print(json.dumps(descriptions["hardware_bom"] if args.command == "bom" else descriptions, indent=2))

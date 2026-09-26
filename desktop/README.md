@@ -46,7 +46,7 @@ Installed apps use their bundled Python by default. Choose an interpreter in the
 picker's **Settings**, or reopen **Project settings…** from the project menu.
 Use `--python /path/to/python` when launching directly
 if your project requires additional packages; install
-`cadkit[desktop]` and those packages there first. A consumer with a `src/`
+`cadkit-py[desktop]` and those packages there first. A consumer with a `src/`
 package layout must be installed in that custom environment or supplied
 through `PYTHONPATH` with the `--python` override.
 

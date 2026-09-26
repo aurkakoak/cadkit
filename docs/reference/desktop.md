@@ -22,7 +22,7 @@ On macOS, use the executable inside the installed application, for example:
 | --- | --- |
 | `--project-dir PATH` | Project directory used for imports, watching and session identity |
 | `--project MODULE:ATTRIBUTE` | Importable Project reference; default `project:PROJECT` |
-| `--python PATH` | Use a custom Python containing `cadkit[desktop]` and project dependencies |
+| `--python PATH` | Use a custom Python containing `cadkit-py[desktop]` and project dependencies |
 | `--mcp` | Run the installed executable as the stdio MCP bridge to an already open app |
 
 Launching an installed app without an explicit project opens its editable

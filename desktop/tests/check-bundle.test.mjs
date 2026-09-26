@@ -50,7 +50,7 @@ test("packaging verifies matching installed and imported CadKit with isolated bu
   const [executable, args, options] = runtime.mock.calls[0].arguments;
   assert.equal(executable, path.join(directory, "bundle/python/bin/python3"));
   assert.deepEqual(args.slice(0, 2), ["-I", "-c"]);
-  assert.match(args[2], /importlib\.metadata\.version\('cadkit'\)/);
+  assert.match(args[2], /importlib\.metadata\.version\('cadkit-py'\)/);
   assert.match(args[2], /cadkit\.__version__/);
   assert.equal(options.env, undefined);
   assert.equal(runtime.mock.calls.length, 1);

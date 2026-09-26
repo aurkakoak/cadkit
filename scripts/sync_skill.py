@@ -83,6 +83,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Fail if committed references need regeneration.")
     args = parser.parse_args()
     expected = generated_references()
+    expected[ROOT / "skill" / "LICENSE"] = (ROOT / "LICENSE").read_bytes()
     entrypoint = ROOT / "skill" / "SKILL.md"
     for match in LINK.finditer(entrypoint.read_text(encoding="utf-8")):
         url = urlsplit(match[2])
