@@ -123,7 +123,14 @@ try {
     [
       "-I",
       "-c",
-      "import pathlib,sys,cadkit,cq_warehouse,manifold3d,trimesh; assert pathlib.Path(cadkit.__file__).is_relative_to(pathlib.Path(sys.prefix)); print('Bundled imports OK:', sys.prefix)",
+      `import importlib.util, pathlib, sys, cadkit, manifold3d, trimesh
+assert pathlib.Path(cadkit.__file__).is_relative_to(pathlib.Path(sys.prefix))
+assert importlib.util.find_spec('cq_warehouse') is None
+for kind in ('socket_head_cap_screw', 'countersunk_screw'):
+    hardware = cadkit.FastenerSpec(kind, 'M3-0.5', length_mm=8).build()
+    assert hardware.isValid() and hardware.Volume() > 0
+print('Bundled imports and catalogue hardware OK:', sys.prefix)
+`,
     ],
     { cwd: project, env: smokeEnv },
   );
