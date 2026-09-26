@@ -85,7 +85,7 @@ cd my-cad-project
 uv add cadkit-py
 ```
 
-Add your `project.py`, then check that CadKit can load it:
+With `project.py` in the current directory:
 
 ```sh
 uv run cadkit --project project:PROJECT describe
@@ -97,14 +97,16 @@ Run commands from the directory containing the module. A project using a
 `src/` package layout should be installed into its environment with its own
 packaging configuration.
 
-CadKit installs from PyPI, including its fastener catalogue. Keep `pyproject.toml` and `uv.lock` in
-version control so that collaborators use the same dependencies.
+Commit `pyproject.toml` and `uv.lock` with your project.
 
 ## Use additional Python dependencies in the desktop
 
-Run `uv add 'cadkit-py[desktop]'` and add any other dependencies to your project
-with `uv add`, then select that environment's
-Python executable in the picker's **Settings → Python interpreter**. For an open
+```sh
+uv add 'cadkit-py[desktop]'
+```
+
+Add other dependencies with `uv add`. Select the environment's Python executable
+in **Settings → Python interpreter**. For an open
 project, use **Project settings…** in its project menu. Leave the interpreter field
 empty to use the app's default. For a direct launch, append:
 
@@ -112,7 +114,6 @@ empty to use the app's default. For a direct launch, append:
 --python "$PWD/.venv/bin/python"
 ```
 
-That interpreter must contain `cadkit-py[desktop]` and your project dependencies.
 Use the same environment for CLI validation and desktop inspection.
 
 | Problem | What to check |

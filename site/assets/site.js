@@ -1,6 +1,7 @@
 "use strict";
 
 for (const button of document.querySelectorAll("[data-copy]")) {
+  const label = button.getAttribute("aria-label");
   button.addEventListener("click", async () => {
     const code = document.getElementById(button.dataset.copy);
     const status = document.getElementById("copy-status");
@@ -11,7 +12,7 @@ for (const button of document.querySelectorAll("[data-copy]")) {
       status.textContent = "Command copied to clipboard.";
       setTimeout(() => {
         button.classList.remove("copied");
-        button.setAttribute("aria-label", button.dataset.copy === "skill-command" ? "Copy skill command" : "Copy installer command");
+        button.setAttribute("aria-label", label);
         status.textContent = "";
       }, 2000);
     } catch {

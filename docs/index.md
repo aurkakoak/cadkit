@@ -4,6 +4,12 @@ CadKit gives a CadQuery model named parts, assemblies, manufacturing information
 and checks. You keep writing Python geometry and use CadKit to inspect it,
 export it and work on it with an agent.
 
+```sh
+uv add cadkit-py
+```
+
+[Installation](how-to/install.md) · [PyPI](https://pypi.org/project/cadkit-py/)
+
 CadKit's recommended structure keeps design inputs, local part geometry,
 manufacturing and assembly placement explicit. Start small, then compose parts
 and subsystems around their responsibilities. See

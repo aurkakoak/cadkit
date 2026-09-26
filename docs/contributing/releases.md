@@ -45,10 +45,9 @@ the external cq_warehouse package, and exports a model using the installed CLI.
 CI runs these checks on all four release platforms with Python 3.12, plus
 Linux x64 with Python 3.11, 3.13 and 3.14. Use `--python 3.11` to select another interpreter.
 
-## Configure PyPI once
+## PyPI
 
-Create a PyPI account with two-factor authentication and add a pending Trusted
-Publisher for a new project at <https://pypi.org/manage/account/publishing/>:
+Configure [Trusted Publishing](https://pypi.org/manage/project/cadkit-py/settings/publishing/):
 
 - Project: `cadkit-py`
 - Owner: `aurkakoak`
@@ -56,14 +55,7 @@ Publisher for a new project at <https://pypi.org/manage/account/publishing/>:
 - Workflow: `release.yml`
 - Environment: `pypi`
 
-Create the matching `pypi` environment in the repository's GitHub settings.
-If the PyPI project already exists, its owner must add this publisher in the
-project settings instead. A pending publisher does not reserve the name.
-No long-lived PyPI token is needed. CadKit's original code is licensed under
-Apache-2.0; distributions include the licence and retain bundled third-party notices.
-
-The PyPI distribution is named `cadkit-py`; the Python import, CLI command,
-GitHub repository and skill remain `cadkit`.
+Use the matching `pypi` GitHub environment. Publishing uses OIDC; no API token is required.
 
 ## Build installers
 

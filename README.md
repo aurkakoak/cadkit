@@ -58,7 +58,7 @@ are included.
 You can also download a DMG or Linux archive from [Releases](https://github.com/aurkakoak/cadkit/releases/latest).
 Unsigned builds may show a macOS security warning.
 
-**Python** — to run the example or use the CLI, install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
+**Python** — requires [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```sh
 uv init --python 3.12 my-cad-project
@@ -68,9 +68,7 @@ uv add cadkit-py
 uv run cadkit --project project:PROJECT build all
 ```
 
-To use this project's Python environment in the desktop app, install
-`uv add 'cadkit-py[desktop]'`. The extra supplies Python viewer dependencies;
-install the Electron app separately using the instructions above.
+For a custom desktop environment: `uv add 'cadkit-py[desktop]'`.
 
 **Agent skill:**
 

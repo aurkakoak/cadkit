@@ -14,10 +14,7 @@ cd cadkit-box
 uv add 'cadkit-py[desktop]'
 ```
 
-This installs CadKit, CadQuery and the Python dependencies needed to open this
-project in the desktop app. Keep the generated `pyproject.toml` and `uv.lock`;
-they record the environment for your model. Run the remaining commands from
-this directory.
+Commit `pyproject.toml` and `uv.lock`. Run the remaining commands from this directory.
 
 ## Write the shapes
 

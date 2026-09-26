@@ -82,8 +82,7 @@ uv add cadkit-py
 uv run cadkit --project project:PROJECT build all
 ```
 
-For desktop inspection using this environment, run `uv add 'cadkit-py[desktop]'`.
-This installs Python viewer dependencies; the Electron app is installed separately.
+For a custom desktop environment: `uv add 'cadkit-py[desktop]'`.
 
 Install the agent instructions from your project directory:
 
