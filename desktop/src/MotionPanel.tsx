@@ -9,7 +9,7 @@ export function MotionPanel({
   onStart: () => void;
 }) {
   const state = useSyncExternalStore(player.subscribe, player.getSnapshot);
-  const joints = player.graph.joints.filter((j) => j.kind === "revolute");
+  const joints = player.graph.joints;
   if (!joints.length) return null;
   return (
     <section className="detail-section motion-panel" aria-label="Motion">
@@ -30,13 +30,19 @@ export function MotionPanel({
         const range = controlRange(player.graph, j.id),
           disabled = coupled || range[0] === range[1];
         const label = j.id.replaceAll("/", " / ").replaceAll("-", " ");
-        const min = Number.isFinite(range[0]) ? range[0] : j.position - 180;
-        const max = Number.isFinite(range[1]) ? range[1] : j.position + 180;
-        const angle = state.values[j.id];
+        const rotary = j.kind === "revolute";
+        const value = state.values[j.id];
+        const span = rotary ? 180 : 100;
+        const min = Number.isFinite(range[0])
+          ? range[0]
+          : Math.min(j.position - span, rotary ? j.position : value);
+        const max = Number.isFinite(range[1])
+          ? range[1]
+          : Math.max(j.position + span, rotary ? j.position : value);
         const shown =
-          Number.isFinite(range[0]) || Number.isFinite(range[1])
-            ? angle
-            : ((((angle - j.position + 180) % 360) + 360) % 360) +
+          !rotary || Number.isFinite(range[0]) || Number.isFinite(range[1])
+            ? value
+            : ((((value - j.position + 180) % 360) + 360) % 360) +
               j.position -
               180;
         return (
@@ -44,7 +50,7 @@ export function MotionPanel({
             <h3>{label}</h3>
             <div className="motion-coordinate">
               <input
-                aria-label={`${label} angle`}
+                aria-label={`${label} ${rotary ? "angle" : "position"}`}
                 type="range"
                 min={min}
                 max={max}
@@ -56,7 +62,10 @@ export function MotionPanel({
                   player.set(j.id, e.target.valueAsNumber);
                 }}
               />
-              <output>{shown.toFixed(1)}°</output>
+              <output>
+                {shown.toFixed(1)}
+                {rotary ? "°" : " mm"}
+              </output>
             </div>
             {!coupled && (
               <div className="motion-playback">
@@ -76,7 +85,7 @@ export function MotionPanel({
                   )}
                 </button>
                 <label>
-                  rpm
+                  {rotary ? "rpm" : "mm/s"}
                   <input
                     aria-label={`${label} speed`}
                     type="number"

@@ -148,9 +148,9 @@ export class MotionPlayer {
       this.publish(String(e));
     }
   }
-  speed(id: string, rpm: number) {
-    if (Number.isFinite(rpm) && Math.abs(rpm) <= 120) {
-      this.speeds[id] = rpm;
+  speed(id: string, value: number) {
+    if (Number.isFinite(value) && Math.abs(value) <= 120) {
+      this.speeds[id] = value;
       this.publish();
     }
   }
@@ -179,8 +179,9 @@ export class MotionPlayer {
           const speed = this.speeds[j.id] ?? 10;
           const current = this.overrides[j.id] ?? j.position;
           const [min, max] = controlRange(this.graph, j.id);
-          let next = current + speed * 6 * dt;
-          if (next > max || next < min) {
+          // Revolute speed is rpm; slider speed is millimetres per second.
+          let next = current + speed * (j.kind === "revolute" ? 6 : 1) * dt;
+          if ((speed > 0 && next >= max) || (speed < 0 && next <= min)) {
             next = Math.min(max, Math.max(min, next));
             this.playing[j.id] = false;
           }

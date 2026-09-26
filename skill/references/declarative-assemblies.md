@@ -189,8 +189,8 @@ inherit manufactured Part groups when omitted.
 
 ## Desktop motion preview
 
-The inspector's **Motion** controls adjust revolute angles and play independent
-joints at signed rpm. Coupled joints follow their drivers; playback stops at limits.
+The inspector's **Motion** controls adjust revolute angles in degrees and slider
+positions in millimetres. Independent joints play at signed rpm or mm/s respectively. Coupled joints follow their drivers; playback stops at limits.
 The framework supplies `Assembly.motion_graph()` and directed parent/child metadata,
 so clients do not infer moving parts from names or edit geometry. Its column-major
 millimetre matrices transform installed display meshes; nested descendants and
