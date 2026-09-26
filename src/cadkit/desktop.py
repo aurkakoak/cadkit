@@ -78,7 +78,7 @@ class Session:
                 return (
                     {
                         "version": 3,
-                        "name": node.name,
+                        "name": quote(node.name, safe=""),
                         "id": path,
                         "parts": [c[0] for c in children],
                     },
@@ -133,6 +133,7 @@ class Session:
 
                 def expand(item, item_path):
                     item["id"] = item_path
+                    item["name"] = item_path.rsplit("/", 1)[-1]
                     if "parts" in item:
                         for index, child in enumerate(item["parts"]):
                             expand(child, item_path + f"/shape-{index}")
@@ -140,7 +141,7 @@ class Session:
                         item["shape"] = meshes[item["shape"]["ref"]]
 
                 expand(visual, path)
-            visual.update(version=3, id=path, name=node.name)
+            visual.update(version=3, id=path, name=quote(node.name, safe=""))
             bb = bounds(model)
             info = {
                 "id": path,
@@ -265,7 +266,7 @@ class Session:
         components = [self.components[i] for i in ids]
         if animation and not any(any(c.explode) for c in components):
             raise ValueError("Selected components have no explosion offsets")
-        return export_render_assets(components, output_dir, exploded=exploded)
+        return export_render_assets(components, output_dir, exploded=exploded, variant_selection=getattr(self.project, "variant_selection", {}))
 
     def export_parts(self, revision, names, output_dir, validation_override=None):
         if revision != self.revision:
@@ -279,10 +280,24 @@ class Session:
         return {"directory": str(destination), "manifest": manifest}
 
 
+def project_dependencies(project):
+    dependencies = set(getattr(getattr(project, "_variants", None), "dependencies", ()))
+    prefixes = (Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve())
+    for module in tuple(sys.modules.values()):
+        filename = getattr(module, "__file__", None)
+        if filename and filename.endswith(".py"):
+            path = Path(filename).resolve()
+            if not any(path.is_relative_to(prefix) for prefix in prefixes):
+                dependencies.add(str(path))
+    return sorted(dependencies)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", required=True)
+    parser.add_argument("--variant", action="append", default=[])
     args = parser.parse_args()
+    from .variants import parse_variants
     protocol = sys.stdout
 
     def emit(message):
@@ -296,9 +311,14 @@ def main():
 
     with redirect_stdout(sys.stderr):
         session = Session(
-            load_project(args.project),
+            load_project(args.project, parse_variants(args.variant)),
             lambda message: emit({"event": "progress", "message": message}),
         )
+        # Explicit input paths and imported source outside the interpreter are
+        # watched before geometry is built, including consumer libraries outside
+        # the project root. Installed runtime upgrades require a restart.
+        dependencies = [str(Path(p).resolve()) for p in project_dependencies(session.project)]
+        emit({"event": "inputs", "paths": dependencies})
         for line in sys.stdin:
             request = {}
             try:
@@ -307,6 +327,8 @@ def main():
                 if method not in {"scene", "measure", "export_part", "export_parts", "mechanical_report", "render_assets"}:
                     raise ValueError(f"Unknown method: {method}")
                 result = getattr(session, method)(**request.get("params", {}))
+                if method == "scene":
+                    emit({"event": "inputs", "paths": [str(Path(p).resolve()) for p in project_dependencies(session.project)]})
                 emit({"id": request["id"], "result": result})
             except Exception as exc:
                 traceback.print_exc(file=sys.stderr)

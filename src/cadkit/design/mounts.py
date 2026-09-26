@@ -9,6 +9,7 @@ import math
 import cadquery as cq
 from ..fasteners import FastenerSpec, FastenerSite, HardwareItem
 from ..mechanics import Fastening
+from ..fits import Countersink
 from .frames import Frame, positive
 from .manufacturing import Hole, _cut, _points, _describe_pattern
 
@@ -148,7 +149,9 @@ class _Mount:
         Args:
             at (Frame): Shared mating datum, +Z toward the clamped layers.
             thickness (float): This layer's thickness in millimetres.
-            head_recess (Counterbore | None): Optional head recess; must leave a seat.
+            head_recess (Counterbore | Countersink | None): Optional head recess;
+                countersunk screws require a matching Countersink and use the
+                outer face as their head-inclusive length datum.
             offset (float): Layer start above the mating datum, in millimetres.
             slot_length (float | None): Overall milled-slot length in millimetres.
             slot_angle (float): Slot orientation in local XY degrees.
@@ -158,8 +161,9 @@ class _Mount:
                 site. Mutually exclusive with `slot_length`; must cover the nominal axis.
 
         Returns:
-            (MountFeature): Owned clearance role. Seat Z is offset plus thickness
-                minus recess depth, determining screw grip.
+            (MountFeature): Owned clearance role. The reference Z is offset plus
+                thickness, minus depth for a Counterbore only. Countersunk screws
+                reference the outer face because their length includes the head.
         """
         return MountFeature(self, "clearance", at, thickness, head_recess, offset,
                             slot_length, slot_angle, slot_radial, supplied, drill_offsets)
@@ -357,7 +361,7 @@ class MountFeature:
     role: str
     at: Frame = Frame()
     thickness: float | None = None
-    head_recess: Counterbore | None = None
+    head_recess: Counterbore | Countersink | None = None
     offset: float = 0
     slot_length: float | None = None
     slot_angle: float = 0
@@ -389,9 +393,17 @@ class MountFeature:
             positive(self.thickness, "Thickness")
             if self.head_recess is not None:
                 if self.head_recess.depth >= self.thickness:
-                    raise ValueError("Counterbore must leave a positive screw seat")
-                if self.head_recess.diameter <= self.mount.clearance_diameter:
+                    raise ValueError("Head recess must leave a positive screw seat")
+                if isinstance(self.head_recess, Countersink):
+                    if (self.head_recess.through_diameter != self.mount.clearance_diameter
+                            or self.mount.screw.kind != "countersunk_screw"
+                            or self.head_recess.included_angle != 90
+                            or self.slot_length is not None or self.drill_offsets is not None):
+                        raise ValueError("Countersink requires a matching round clearance hole and a 90 degree countersunk screw")
+                elif self.head_recess.diameter <= self.mount.clearance_diameter:
                     raise ValueError("Counterbore must exceed clearance diameter")
+            if self.role == "clearance" and self.mount.screw.kind == "countersunk_screw" and not isinstance(self.head_recess, Countersink):
+                raise ValueError("Countersunk screws require a countersunk clearance role")
             if self.slot_length is not None:
                 if not math.isfinite(self.slot_length) or self.slot_length < self.mount.clearance_diameter:
                     raise ValueError("Slot length must be at least the clearance diameter")
@@ -406,7 +418,7 @@ class MountFeature:
         """Return the clamped role screw-seat Z coordinate in millimetres; receivers have no seat."""
         if self.role not in {"clearance", "middle"}:
             raise ValueError("Only clamped roles have a screw/spacer seat")
-        return self.offset + self.thickness - (self.head_recess.depth if self.head_recess else 0)
+        return self.offset + self.thickness - (self.head_recess.depth if isinstance(self.head_recess, Counterbore) else 0)
 
     def cutters(self):
         if self.supplied:
@@ -432,7 +444,9 @@ class MountFeature:
                 else:
                     cut = cq.Solid.makeCylinder(self.mount.clearance_diameter/2, height, (x,y,bottom))
                 items = [cut]
-                if self.head_recess:
+                if isinstance(self.head_recess, Countersink):
+                    items.append(self.head_recess.cutter(self.seat, at=(x, y), overlap=_OVERSHOOT))
+                elif self.head_recess:
                     items.append(cq.Solid.makeCylinder(self.head_recess.diameter/2,
                                  self.head_recess.depth+self.head_recess.entry_extension+_OVERSHOOT, (x,y,self.seat)))
             cutters.append(tuple(c.moved(self.at.location) for c in items))
@@ -454,10 +468,21 @@ class MountFeature:
         elif not self.supplied and self.role == "threaded":
             operations = [{"kind": self.mount.method, "thread": self.mount.screw.size,
                            "thread_depth": self.mount.thread_depth, "quantity": len(self.mount.pattern.points)}]
+        if not self.supplied and isinstance(self.head_recess, Countersink):
+            operations.append({"kind": "countersink", "quantity": len(self.mount.pattern.points),
+                               "head_diameter": self.head_recess.head_diameter,
+                               "included_angle": self.head_recess.included_angle,
+                               "depth": self.head_recess.depth})
+        recess = None
+        if isinstance(self.head_recess, Countersink):
+            recess = {"kind": "countersink", "through_diameter": self.head_recess.through_diameter,
+                      "head_diameter": self.head_recess.head_diameter,
+                      "included_angle": self.head_recess.included_angle, "depth": self.head_recess.depth}
+        elif self.head_recess:
+            recess = {"diameter": self.head_recess.diameter, "depth": self.head_recess.depth,
+                      "entry_extension": self.head_recess.entry_extension}
         return {"kind": self.mount.describe()["kind"]+"-role", "role": self.role,
                 "frame": self.at.describe(), "mount": self.mount.describe(), "thickness": self.thickness,
                 "offset": self.offset, "supplied": self.supplied, "slot_length": self.slot_length,
                 "slot_angle": self.slot_angle, "slot_radial": self.slot_radial, "drill_offsets": self.drill_offsets,
-                "head_recess": ({"diameter": self.head_recess.diameter, "depth": self.head_recess.depth,
-                                 "entry_extension": self.head_recess.entry_extension}
-                                if self.head_recess else None), "operations": operations}
+                "head_recess": recess, "operations": operations}

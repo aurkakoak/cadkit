@@ -92,6 +92,7 @@ export interface Part {
   description: string;
   production: boolean;
   print_rotation: [number, number, number];
+  design?: { manufacture?: { process: string } };
   print_frame?: { origin: Vector; z: Vector; x: Vector };
   notes: string;
 }
@@ -129,8 +130,16 @@ export interface Snapshot {
   tree: Assembly;
   components: Component[];
   build_seconds: number;
+  cached?: boolean;
+  geometry_revision?: string;
+  source_generation?: number;
   mechanics?: Mechanics;
   project: {
+    variants?: Record<
+      string,
+      { label: string; options: string[]; default: string; scope?: string }
+    >;
+    variant_selection?: Record<string, string>;
     name: string;
     description: string;
     units: string;
@@ -219,6 +228,10 @@ declare global {
         launcher: LauncherState;
       }>;
       rebuild(): Promise<Snapshot>;
+      warmVariants(revision: string): Promise<void>;
+      setVariants(
+        values: Record<string, string>,
+      ): Promise<{ revision: string; cached: boolean }>;
       measure(params: {
         revision: string;
         ids: string[];

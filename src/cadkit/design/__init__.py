@@ -13,8 +13,10 @@ from .assembly import Assembly, AssemblyPose, Instance, ComponentRef
 from .purchased import Purchased
 from .motion import Rigid, Revolute, Slider
 from .dimensions import Dimensions, input
+from ..fits import Countersink
 
 __all__ = ["CaptiveNutFastening", "SetScrew", "Frame", "PolarPattern", "Part", "Feature", "FDM", "LaserCut", "InsertMount",
+           "Countersink",
            "InsertPocket", "Counterbore", "Assembly", "AssemblyPose", "Purchased",
            "PointPattern", "Rigid", "Revolute", "Slider", "ThreadedMount", "InsertBoss",
            "Hole", "CounterboredHole", "CountersunkHole", "TappedHole", "BearingSeat",

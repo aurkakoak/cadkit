@@ -27,6 +27,11 @@ const validationOverride = z
     "Explicit reason for exporting despite assembly failures; saved with the artifact report. Read mechanical_report first.",
   );
 export const definitions = {
+  set_variants: {
+    description:
+      "Select design alternatives from get_state.project.variants. Builds or restores a cached configuration and returns its new revision. Unspecified choices retain their current values.",
+    schema: z.object({ revision, selection: z.record(z.string(), z.string()) }),
+  },
   mechanical_report: {
     description:
       "Validate native installed assembly collisions, Joint/Interface/Fastening contracts, fastener stacks and declared access. Returns revision-scoped findings, bounded intended contact, and explicit unverified coverage. Optional Parts restrict findings to a print set while retaining full assembly context. Does not establish loaded strength or every possible insertion path.",

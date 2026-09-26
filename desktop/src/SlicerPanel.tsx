@@ -35,7 +35,22 @@ export function SlicerPanel({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [config, setConfig] = useState<SlicerSettings | null>(null);
-  const [parts, setParts] = useState(new Set(initialParts));
+  const printable = scene.project.parts.filter(
+    (p) => p.design?.manufacture?.process !== "laser-cut",
+  );
+  const [parts, setParts] = useState(
+    new Set(
+      initialParts.filter((name) => printable.some((p) => p.name === name)),
+    ),
+  );
+  useEffect(() => {
+    setParts(
+      (before) =>
+        new Set(
+          [...before].filter((name) => printable.some((p) => p.name === name)),
+        ),
+    );
+  }, [scene.revision]);
   const [jobs, setJobs] = useState<SliceJob[]>([]);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
@@ -148,7 +163,7 @@ export function SlicerPanel({
     starting ||
     saving ||
     jobs.some((j) => ["exporting", "running"].includes(j.phase));
-  const selected = scene.project.parts.filter((p) => parts.has(p.name));
+  const selected = printable.filter((p) => parts.has(p.name));
   return (
     <dialog className="print-dialog" ref={dialog} onCancel={onClose}>
       <header>
@@ -175,7 +190,7 @@ export function SlicerPanel({
               if (value)
                 setParts(
                   new Set(
-                    scene.project.parts
+                    printable
                       .filter((p) =>
                         value === "all"
                           ? p.production && p.quantity > 0
@@ -188,16 +203,14 @@ export function SlicerPanel({
           >
             <option value="">Selection</option>
             <option value="all">Production</option>
-            {[...new Set(scene.project.parts.map((p) => p.group))].map(
-              (group) => (
-                <option key={group} value={group}>
-                  {group}
-                </option>
-              ),
-            )}
+            {[...new Set(printable.map((p) => p.group))].map((group) => (
+              <option key={group} value={group}>
+                {group}
+              </option>
+            ))}
           </select>
           <div className="print-part-list">
-            {scene.project.parts.map((part) => (
+            {printable.map((part) => (
               <label key={part.name}>
                 <input
                   type="checkbox"

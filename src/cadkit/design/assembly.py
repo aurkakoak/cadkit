@@ -215,6 +215,19 @@ class Assembly:
         self._poses = {}
         self._interfaces = {}
         self._access = {}
+        self._variant_choices = {}
+
+    def variant(self, key, choice, *, selected=None):
+        """Declare and resolve a choice owned by this assembly's tree row.
+
+        Use a stable project-unique key and a ``ck.Variant`` definition. During
+        ``ck.Variants(builder).project(...)``, the requested value overrides the
+        default. Standalone builders may supply ``selected`` explicitly. The
+        containing project discovers the choice and its installed instance path;
+        parent assemblies do not need to forward configuration arguments.
+        """
+        from ..variants import assembly_choice
+        return assembly_choice(self, key, choice, selected)
 
     @property
     def instances(self):
@@ -1020,6 +1033,7 @@ class Assembly:
         if id(self) in ancestors:
             raise ValueError("Recursive assembly cycle")
         frozen = Assembly(self.name)
+        frozen._variant_choices = dict(self._variant_choices)
         replacements = {}
         for name, instance in self._instances.items():
             definition = instance.part._snapshot((*ancestors, id(self))) if isinstance(instance.part, Assembly) else instance.part

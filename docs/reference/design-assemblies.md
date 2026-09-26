@@ -30,6 +30,10 @@ instances default to `"Purchased"`. Supply
 without changing the Part's manufacturing group. Nested leaves retain their
 own groups when their containing instance has no group override.
 
+Use `assembly.variant(key, ck.Variant(...))` to declare a construction choice
+on this assembly. Its selector appears on the installed assembly's tree row;
+parent assemblies compose it normally. See [Variants](../how-to/variants.md).
+
 ::: cadkit.Assembly
     options:
       show_root_heading: true
@@ -37,6 +41,7 @@ own groups when their containing instance has no group override.
       heading_level: 3
       members:
         - add
+        - variant
         - fix
         - export_port
         - export_feature

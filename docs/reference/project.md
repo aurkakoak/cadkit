@@ -163,3 +163,9 @@ their source. Edit the source and rebuild to change the design.
 For automatic collision scans and hardware engagement, use
 [mechanical validation](mechanics.md). An empty set of custom checks cannot
 establish that a design has been physically validated.
+
+## Variants
+
+Use [`Variants` and `Variant`](../how-to/variants.md) to expose discrete design
+choices in the desktop and CLI. `Variants.project()` returns an ordinary Project
+with its chosen inventory and mechanics; existing assembly APIs are unchanged.

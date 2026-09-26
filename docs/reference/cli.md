@@ -134,3 +134,9 @@ a process fail; they must not be interpreted as an empty or passing report.
       show_root_heading: true
       show_root_full_path: false
       heading_level: 3
+
+## Variant selection
+
+Pass repeatable `--variant NAME=OPTION` arguments before the command, alongside
+`--project`. For example: `cadkit --project project:PROJECT --variant base=hybrid
+describe`. See [Variants](../how-to/variants.md) for defaults and export provenance.

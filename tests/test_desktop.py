@@ -120,3 +120,21 @@ def test_render_exports_captured_installed_selection(tmp_path, mesh_second, monk
         session.render_assets("old", ["/fixture/right/other"], tmp_path)
     with pytest.raises(ValueError, match="no explosion"):
         session.render_assets(scene["revision"], ["/fixture/right/other"], tmp_path, animation=True)
+
+
+def test_viewer_tree_names_match_encoded_ids_for_nested_hardware_and_compounds():
+    shape = cq.Workplane("XY").box(2, 2, 2).val()
+    compound = cq.Compound.makeCompound([shape, shape.translate((5, 0, 0))])
+    leaf = Component("screw", compound, "Hardware")
+    tree = Assembly("fixture", (Assembly("base/top-mount", (leaf,)),))
+    project = Project("fixture", (), lambda: [leaf], assembly=lambda: tree)
+    snapshot = Session(project).scene()
+    def check(node, parent=""):
+        # three-cad-viewer's visibility tree indexes names, while its geometry
+        # indexes IDs. Every tree path must address the same rendered group.
+        path = parent + "/" + node["name"]
+        assert node["id"] == path
+        for child in node.get("parts", []):
+            check(child, path)
+    check(snapshot["shapes"])
+    assert snapshot["tree"]["children"][0]["name"] == "base/top-mount"

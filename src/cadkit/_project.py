@@ -380,6 +380,8 @@ class Project:
         """Return schema-versioned, JSON-compatible metadata without building geometry."""
         return {
             "schema_version": 1,
+            **({"variants": self._variants.describe(self), "variant_selection": dict(self.variant_selection),
+                "dependencies": list(self._variants.dependencies)} if hasattr(self, "_variants") else {}),
             "name": self.name,
             "description": self.description,
             "units": "mm",

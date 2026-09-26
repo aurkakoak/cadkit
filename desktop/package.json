@@ -1,6 +1,6 @@
 {
   "name": "@cadkit/desktop",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "license": "Apache-2.0",
   "description": "A desktop workbench for CadKit projects",
   "main": "electron/entry.mjs",

@@ -23,8 +23,10 @@ the authored geometry. Rotation units are degrees; translation and geometry use 
 catalogue geometry with simplified threads. Use explicit thread pitch, e.g.
 `M3-0.5`, for screws/nuts; washers use `M3`. Supported families include socket-head,
 button-head and hex-head screws, hex nuts, plain washers and heat-set inserts.
-Countersunk screws are rejected until their distinct length/seat convention is
-supported. Material/process choices and supplier insert dimensions remain explicit.
+Countersunk screws use head-inclusive length and the flush top plane as their
+insertion origin. Use `ck.Countersink(clearance_diameter, head_diameter)` as the
+clearance role's `head_recess`. The 90° cone must leave material beneath it; on
+laser-cut sheet it is a secondary countersinking operation, not a laser contour.
 
 A `Fastening` has:
 

@@ -66,6 +66,13 @@ interface Props {
 export function Viewport(props: Props) {
   const host = useRef<HTMLDivElement>(null);
   const instance = useRef<Viewer | null>(null);
+  const views = useRef(
+    new Map<
+      string,
+      { viewer: Viewer; container: HTMLDivElement; dispose: () => void }
+    >(),
+  );
+  const generation = useRef<number | undefined>(undefined);
   const label = useRef<HTMLDivElement>(null);
   const annotationApi = useRef<AnnotationOverlayApi | null>(null);
   const latest = useRef(props);
@@ -126,8 +133,10 @@ export function Viewport(props: Props) {
     };
   }, [ready]);
 
-  useEffect(() => {
-    const container = host.current!;
+  const createView = () => {
+    const container = document.createElement("div");
+    container.style.cssText = "position:absolute;inset:0";
+    host.current!.appendChild(container);
     const display = new Display(container, {
       cadWidth: container.clientWidth,
       height: container.clientHeight,
@@ -147,7 +156,11 @@ export function Viewport(props: Props) {
     const viewer = new Viewer(display, { tools: false }, null);
     instance.current = viewer;
     const observer = new ResizeObserver(() => {
-      if (container.clientWidth && container.clientHeight) {
+      if (
+        instance.current === viewer &&
+        container.clientWidth &&
+        container.clientHeight
+      ) {
         viewer.resizeCadView(container.clientWidth, 0, container.clientHeight);
       }
     });
@@ -182,38 +195,76 @@ export function Viewport(props: Props) {
     };
     container.addEventListener("pointerdown", down, true);
     container.addEventListener("pointerup", up, true);
-    return () => {
-      observer.disconnect();
-      container.removeEventListener("pointerdown", down, true);
-      container.removeEventListener("pointerup", up, true);
-      viewer.dispose();
-      display.dispose();
-      instance.current = null;
+    return {
+      viewer,
+      container,
+      dispose: () => {
+        observer.disconnect();
+        container.removeEventListener("pointerdown", down, true);
+        container.removeEventListener("pointerup", up, true);
+        viewer.dispose();
+        display.dispose();
+        container.remove();
+      },
     };
-  }, []);
+  };
+
+  useEffect(
+    () => () => {
+      for (const prepared of views.current.values()) prepared.dispose();
+      views.current.clear();
+      instance.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
-    const viewer = instance.current!;
     try {
-      const camera = ready ? viewer.getCameraLocationSettings() : null;
-      if (ready) viewer.clear();
-      viewer.render(
-        structuredClone(props.scene.shapes),
-        {
-          ambientIntensity: 1.4,
-          directIntensity: 1.2,
-          metalness: 0.12,
-          roughness: 0.65,
-          edgeColor: 0x101819,
-        },
-        {
-          up: "Z",
-          control: "orbit",
-          ortho: true,
-          axes,
-          grid: [grid, false, false],
-          transparent: false,
-        },
+      const camera = instance.current?.getCameraLocationSettings();
+      const key = props.scene.geometry_revision ?? props.scene.revision;
+      if (generation.current !== props.scene.source_generation) {
+        for (const prepared of views.current.values()) prepared.dispose();
+        views.current.clear();
+        generation.current = props.scene.source_generation;
+      }
+      for (const prepared of views.current.values())
+        prepared.container.style.display = "none";
+      let prepared = views.current.get(key);
+      const cached = Boolean(prepared);
+      if (!prepared) prepared = createView();
+      views.current.delete(key);
+      views.current.set(key, prepared);
+      prepared.container.style.display = "block";
+      const viewer = prepared.viewer;
+      instance.current = viewer;
+      if (!cached)
+        viewer.render(
+          structuredClone(props.scene.shapes),
+          {
+            ambientIntensity: 1.4,
+            directIntensity: 1.2,
+            metalness: 0.12,
+            roughness: 0.65,
+            edgeColor: 0x101819,
+          },
+          {
+            up: "Z",
+            control: "orbit",
+            ortho: true,
+            axes,
+            grid: [grid, false, false],
+            transparent: false,
+          },
+        );
+      while (views.current.size > 3) {
+        const oldest = views.current.keys().next().value!;
+        views.current.get(oldest)!.dispose();
+        views.current.delete(oldest);
+      }
+      viewer.resizeCadView(
+        host.current!.clientWidth,
+        0,
+        host.current!.clientHeight,
       );
       viewer.setTheme(latest.current.theme);
       // A scene.background would clear every GPU picking pass. Set the renderer
@@ -251,12 +302,16 @@ export function Viewport(props: Props) {
   useEffect(() => {
     const viewer = instance.current;
     if (!viewer || !ready) return;
-    props.scene.components.forEach((c) =>
-      viewer.setState(
-        c.id,
-        props.hidden.has(c.id)
-          ? [0, 0]
-          : [1, edges && c.geometry === "native" ? 1 : 0],
+    // Apply visibility in one paint. Per-component setState redraws the entire
+    // model for every leaf and dominates switching time on large assemblies.
+    viewer.setStates(
+      Object.fromEntries(
+        props.scene.components.map((c) => [
+          c.id,
+          props.hidden.has(c.id)
+            ? [0, 0]
+            : [1, edges && c.geometry === "native" ? 1 : 0],
+        ]),
       ),
     );
     viewer.setAxes(axes);

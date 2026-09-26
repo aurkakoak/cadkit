@@ -51,6 +51,12 @@ class Countersink:
     head_diameter: float
     included_angle: float = 90
 
+    def __post_init__(self):
+        import math
+        if not all(math.isfinite(v) for v in (self.through_diameter, self.head_diameter, self.included_angle)):
+            raise ValueError("Countersink dimensions must be finite")
+        self.depth
+
     @property
     def depth(self):
         import math
@@ -78,12 +84,15 @@ class Countersink:
         Returns:
             (cq.Shape): Native conical cutter. This cutter does not include the throat hole.
         """
+        import math
+        if not math.isfinite(overlap) or overlap < 0:
+            raise ValueError("Countersink overlap must be finite and nonnegative")
         return translate(
             [
                 cylinder(
                     h=self.depth + overlap,
                     d1=self.through_diameter,
-                    d2=self.head_diameter,
+                    d2=self.head_diameter + 2 * overlap * math.tan(math.radians(self.included_angle / 2)),
                 )
             ],
             (*at, top_z - self.depth),

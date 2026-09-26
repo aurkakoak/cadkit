@@ -10,13 +10,14 @@ import {
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync, renameSync, mkdirSync } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
 import { startBridge } from "./local-bridge.mjs";
 import { validateCommand } from "./control-schema.mjs";
+import { BuildCache } from "./build-cache.mjs";
 import { Renderer } from "./renderer.mjs";
 import { Slicer } from "./slicer.mjs";
 import { argument, resolveRuntime } from "./runtime.mjs";
@@ -59,7 +60,11 @@ function requireSession() {
 }
 function checkRevision(session, revision) {
   assertSession(session);
-  if (!session.snapshot || session.snapshot.revision !== revision)
+  if (
+    !session.snapshot ||
+    session.snapshot.revision !== revision ||
+    session.snapshot.source_generation !== session.cache.generation
+  )
     throw new Error("Stale build revision. Read get_state again.");
 }
 function send(event) {
@@ -119,7 +124,8 @@ function dispatch(session, method, params) {
     assertSession(session);
     const result = await executeTool(session, method, params);
     assertSession(session);
-    if (params?.revision) checkRevision(session, params.revision);
+    if (params?.revision && method !== "set_variants")
+      checkRevision(session, params.revision);
     return result;
   });
   session.commandQueue = result.catch(() => {});
@@ -142,6 +148,14 @@ async function executeTool(session, method, raw) {
     throw new Error("Build a project first");
   const params = validateCommand(method, raw);
   if (params.revision) checkRevision(session, params.revision);
+  if (method === "set_variants") {
+    const next = await setVariants(session, params.selection);
+    return {
+      revision: next.revision,
+      selection: next.project.variant_selection,
+      cached: next.cached,
+    };
+  }
   if (method === "get_state") {
     const ui = await control(session, "get_state");
     if (!snapshot || ui.revision !== snapshot.revision)
@@ -236,9 +250,14 @@ async function executeTool(session, method, raw) {
   }
   if (method === "slicer_settings") return slicer.settings();
   if (method === "slice_parts" || method === "prepare_parts") {
-    for (const name of params.parts)
-      if (!snapshot.project.parts.some((p) => p.name === name))
-        throw new Error(`Unknown Part: ${name}`);
+    for (const name of params.parts) {
+      const part = snapshot.project.parts.find((p) => p.name === name);
+      if (!part) throw new Error(`Unknown Part: ${name}`);
+      if (part.design?.manufacture?.process === "laser-cut")
+        throw new Error(
+          `${name} is laser-cut; select printed parts for slicing`,
+        );
+    }
     if (status.phase !== "ready")
       throw new Error(
         "Wait for a successful current build before exporting or slicing",
@@ -252,7 +271,7 @@ async function executeTool(session, method, raw) {
 }
 
 class Worker {
-  constructor(session) {
+  constructor(session, selection = {}) {
     const { python, projectDir, reference, workerEnv } = session.runtime;
     this.sequence = 0;
     this.pending = new Map();
@@ -260,7 +279,17 @@ class Worker {
     this.closed = false;
     this.process = spawn(
       python,
-      ["-u", "-m", "cadkit.desktop", "--project", reference],
+      [
+        "-u",
+        "-m",
+        "cadkit.desktop",
+        "--project",
+        reference,
+        ...Object.entries(selection).flatMap(([key, value]) => [
+          "--variant",
+          `${key}=${value}`,
+        ]),
+      ],
       {
         cwd: projectDir,
         env: { ...workerEnv },
@@ -280,6 +309,13 @@ class Worker {
         this.fail(new Error("Invalid response from CAD worker"));
         return;
       }
+      if (response.event === "inputs") {
+        if (active === session && !session.closed) {
+          for (const file of response.paths) session.inputs.add(file);
+          session.watcher?.add(response.paths);
+        }
+        return;
+      }
       if (response.event === "progress") {
         if (active === session && session.candidate === this)
           publish(session, {
@@ -294,7 +330,17 @@ class Worker {
       clearTimeout(request.timer);
       this.pending.delete(response.id);
       if (response.error) request.reject(new Error(response.error));
-      else request.resolve(response.result);
+      else {
+        if (request.method === "scene")
+          this.nativeRevision = response.result.revision;
+        const result = response.result;
+        request.resolve(
+          request.revision && result?.revision
+            ? { ...result, revision: request.revision }
+            : result,
+        );
+      }
+      if (this.retired && !this.pending.size) this.close();
     });
     this.process.on("error", (error) =>
       this.fail(new Error(`Cannot start ${python}: ${error.message}`)),
@@ -326,10 +372,23 @@ class Worker {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error("CAD operation timed out after five minutes"));
+        if (this.retired && !this.pending.size) this.close();
       }, 300000);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, {
+        resolve,
+        reject,
+        timer,
+        method,
+        revision: params.revision,
+      });
+      if (params.revision)
+        params = { ...params, revision: this.nativeRevision };
       this.process.stdin.write(JSON.stringify({ id, method, params }) + "\n");
     });
+  }
+  retire() {
+    this.retired = true;
+    if (!this.pending.size) this.close();
   }
   close() {
     this.closed = true;
@@ -338,63 +397,125 @@ class Worker {
   }
 }
 
-async function rebuild(session = requireSession()) {
-  assertSession(session);
-  if (session.building) {
-    session.queued = true;
-    return session.building;
+function savedVariants() {
+  try {
+    return JSON.parse(
+      readFileSync(path.join(app.getPath("userData"), "variants.json"), "utf8"),
+    );
+  } catch {
+    return {};
   }
-  const task = (async () => {
-    publish(session, {
-      type: "status",
-      phase: "building",
-      message: "Starting CadQuery…",
-    });
-    const candidate = new Worker(session);
-    session.candidate = candidate;
-    try {
-      const next = await candidate.call("scene");
+}
+function saveVariants(session) {
+  try {
+    const directory = app.getPath("userData");
+    mkdirSync(directory, { recursive: true });
+    const file = path.join(directory, "variants.json");
+    writeFileSync(
+      file + ".tmp",
+      JSON.stringify({ ...savedVariants(), [session.id]: session.selection }),
+    );
+    renameSync(file + ".tmp", file);
+  } catch (error) {
+    console.error("Could not save variant selection", error);
+  }
+}
+function createBuildCache(session) {
+  return new BuildCache({
+    create: (selection, { background } = {}) => {
       assertSession(session);
-      const previous = session.current;
-      session.current = candidate;
-      session.candidate = undefined;
-      session.snapshot = next;
-      session.mechanicalReport = null;
-      previous?.close();
-      publish(session, { type: "scene", scene: next });
+      const worker = new Worker(session, selection);
+      if (!background) session.candidate = worker;
+      return worker;
+    },
+    busy: (selection, cached) =>
       publish(session, {
         type: "status",
-        phase: "ready",
-        message: `Built in ${next.build_seconds.toFixed(1)}s`,
-      });
-      void library
-        .rename(session.id, next.project.name)
-        .then(() => publishLauncher())
-        .catch((error) =>
-          console.error("Could not update recent project:", error),
-        );
-      return next;
-    } catch (error) {
-      candidate.close();
-      if (session.candidate === candidate) session.candidate = undefined;
+        phase: "building",
+        message: cached ? "Switching…" : "Starting CadQuery…",
+      }),
+    failed: (error) => {
+      session.selection = {
+        ...(session.snapshot?.project.variant_selection ?? {}),
+      };
       publish(session, {
         type: "status",
         phase: "error",
         message: error.message,
       });
-      throw error;
-    }
-  })();
-  session.building = task;
-  try {
-    return await task;
-  } finally {
-    if (session.building === task) session.building = undefined;
-    if (active === session && !session.closed && session.queued) {
-      session.queued = false;
-      void rebuild(session).catch(() => {});
-    }
+    },
+    activate: async (entry, cached) => {
+      assertSession(session);
+      session.current = entry.worker;
+      session.candidate = undefined;
+      // A cached build gets a new activation revision: old A requests cannot
+      // become current again after A → B → A.
+      const next = {
+        ...entry.scene,
+        revision: randomUUID(),
+        geometry_revision: entry.scene.revision,
+        source_generation: session.cache.generation,
+        cached,
+      };
+      session.snapshot = next;
+      session.selection = { ...(next.project.variant_selection ?? {}) };
+      saveVariants(session);
+      session.mechanicalReport = null;
+      const dependencies = next.project.dependencies ?? [];
+      session.watcher?.add(
+        dependencies.map((file) =>
+          path.resolve(session.target.projectDir, file),
+        ),
+      );
+      publish(session, {
+        type: "scene",
+        scene: entry.sent ? { ...next, shapes: undefined } : next,
+      });
+      entry.sent = true;
+      publish(session, {
+        type: "status",
+        phase: "ready",
+        message: cached
+          ? "Cached"
+          : `Built in ${next.build_seconds.toFixed(1)}s`,
+      });
+      void library
+        .rename(session.id, next.project.name)
+        .then(() => publishLauncher())
+        .catch(console.error);
+      return next;
+    },
+  });
+}
+function rebuild(session = requireSession(), { invalidate = false } = {}) {
+  assertSession(session);
+  if (invalidate) {
+    session.cache.invalidate();
+    if (!session.snapshot) session.selection = {};
   }
+  const task = session.cache.select(session.selection);
+  session.building = task;
+  task.then(
+    () => {
+      if (session.building === task) session.building = undefined;
+    },
+    () => {
+      if (session.building === task) session.building = undefined;
+    },
+  );
+  return task;
+}
+function setVariants(session, values) {
+  assertSession(session);
+  if (!values || typeof values !== "object" || Array.isArray(values))
+    throw new Error("Expected variant choices");
+  const choices = session.snapshot?.project.variants ?? {};
+  for (const [key, value] of Object.entries(values)) {
+    if (!Object.hasOwn(choices, key) || !choices[key].options.includes(value))
+      throw new Error(`Unknown variant option: ${key}=${value}`);
+  }
+  session.selection = { ...session.selection, ...values };
+  return rebuild(session);
 }
 
 async function launcherState() {
@@ -462,8 +583,7 @@ async function stopSession(session = active) {
   session.queued = false;
   clearTimeout(session.debounce);
   rejectControls("Project session changed", session);
-  session.current?.close();
-  session.candidate?.close();
+  session.cache?.close();
   session.slicer?.close();
   session.renderer?.close();
   const stopped = await Promise.allSettled([
@@ -541,6 +661,8 @@ async function activate(value) {
     target,
     runtime,
     status: { phase: "idle", message: "Ready to build" },
+    selection: savedVariants()[id] ?? {},
+    inputs: new Set(),
     snapshot: null,
     mechanicalReport: null,
     current: undefined,
@@ -565,6 +687,7 @@ async function activate(value) {
     );
     await stopSession();
     active = session;
+    session.cache = createBuildCache(session);
     await library.remember(target, { replaceRecentId: value.replaceRecentId });
     session.slicer = new Slicer({
       userData: app.getPath("userData"),
@@ -608,16 +731,39 @@ async function activate(value) {
         ? [target.projectDir]
         : [target.projectDir, path.join(framework, "src")],
       {
-        ignored: (file, stats) =>
-          /(?:^|[/\\])(?:\.git|\.venv|node_modules|__pycache__|build|dist|vendor|archive)(?:[/\\]|$)/.test(
-            file,
-          ) || Boolean(stats?.isFile() && !file.endsWith(".py")),
+        ignored: (file, stats) => {
+          const userdata = app.getPath("userData");
+          if (file === userdata || file.startsWith(userdata + path.sep))
+            return true;
+          if (
+            /(?:^|[/\\])(?:\.git|\.cadkit|\.venv|node_modules|__pycache__|build|dist)(?:[/\\]|$)/.test(
+              file,
+            )
+          )
+            return true;
+          const declared = [
+            ...session.inputs,
+            ...(session.snapshot?.project.dependencies ?? []),
+          ];
+          const input = declared.some(
+            (p) =>
+              file === path.resolve(target.projectDir, p) ||
+              file.startsWith(path.resolve(target.projectDir, p) + path.sep),
+          );
+          return Boolean(stats?.isFile() && !file.endsWith(".py") && !input);
+        },
         ignoreInitial: true,
         awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
       },
     );
     session.watcher.on("all", (_event, file) => {
-      if (!file.endsWith(".py") || active !== session || session.closed) return;
+      if (active !== session || session.closed) return;
+      session.cache.invalidate();
+      publish(session, {
+        type: "status",
+        phase: "building",
+        message: "Source changed…",
+      });
       clearTimeout(session.debounce);
       session.debounce = setTimeout(() => {
         if (active === session) void rebuild(session).catch(() => {});
@@ -782,7 +928,16 @@ handle("cadkit:load", async () => {
     launcher,
   };
 });
-handle("cadkit:rebuild", () => rebuild());
+handle("cadkit:rebuild", () => rebuild(requireSession(), { invalidate: true }));
+handle("cadkit:set-variants", async (values) => {
+  const next = await setVariants(requireSession(), values);
+  return { revision: next.revision, cached: next.cached };
+});
+handle("cadkit:warm-variants", (revision) => {
+  const session = requireSession();
+  checkRevision(session, revision);
+  if (session.status.phase === "ready") return session.cache.prewarm();
+});
 handle("cadkit:open-link", (value) => {
   const url = new URL(checkedString(value, "link"));
   if (!["https:", "http:"].includes(url.protocol))

@@ -415,8 +415,11 @@ p {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.tree-label > small {
-  margin-left: auto;
+.tree-count {
+  min-width: 24px;
+  margin: 0 5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
   color: var(--quiet);
   font-size: 9px;
 }
@@ -2315,4 +2318,40 @@ dd {
   display: block;
   color: var(--muted);
   margin-top: 8px;
+}
+
+.tree-variant {
+  position: relative;
+  display: inline-flex;
+  max-width: 110px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.tree-variant select {
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
+  padding: 2px 22px 2px 7px;
+  font-size: 10.5px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.tree-variant select:hover {
+  background: var(--hover);
+  border-color: var(--line);
+}
+.tree-variant select option {
+  background: var(--panel);
+  color: var(--text);
+}
+.tree-variant > svg {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  color: var(--muted);
+  pointer-events: none;
 }

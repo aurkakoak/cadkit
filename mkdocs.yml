@@ -104,6 +104,7 @@ nav:
       - Connect an agent: how-to/connect-an-agent.md
       - Slice parts: how-to/slice-parts.md
       - Nest assemblies and add motion: how-to/nested-assemblies.md
+      - Explore variants: how-to/variants.md
       - Render with Blender: how-to/render-with-blender.md
   - Explanation:
       - explanation/index.md

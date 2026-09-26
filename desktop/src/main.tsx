@@ -217,6 +217,10 @@ function ProjectWorkbench({
   onOpen: (choice?: ProjectChoice) => void;
 }) {
   const [scene, setScene] = useState<Snapshot | null>(null);
+  const [variantSelection, setVariantSelection] = useState<
+    Record<string, string>
+  >({});
+  const variantRequest = useRef(0);
   const [status, setStatus] = useState<Status>({
     phase: "building",
     message: "Starting CadQuery…",
@@ -329,12 +333,32 @@ function ProjectWorkbench({
     throw new Error("View is loading");
   });
   const currentRevision = useRef("");
+  const shapeCache = useRef(new Map<string, Snapshot["shapes"]>());
+  const shapeGeneration = useRef<number | undefined>(undefined);
   const measureSequence = useRef(0);
 
   const acceptScene = (next: Snapshot) => {
+    if (shapeGeneration.current !== next.source_generation) {
+      shapeCache.current.clear();
+      shapeGeneration.current = next.source_generation;
+    }
+    const geometry = next.geometry_revision ?? next.revision;
+    const shapes = next.shapes ?? shapeCache.current.get(geometry);
+    if (!shapes) {
+      void window.cadkit.load().then((loaded) => {
+        if (loaded.scene) acceptScene(loaded.scene);
+      });
+      return;
+    }
+    shapeCache.current.delete(geometry);
+    shapeCache.current.set(geometry, shapes);
+    while (shapeCache.current.size > 3)
+      shapeCache.current.delete(shapeCache.current.keys().next().value!);
+    next = { ...next, shapes };
     if (currentRevision.current === next.revision) return;
     currentRevision.current = next.revision;
     setScene(next);
+    setVariantSelection(next.project.variant_selection ?? {});
     setHardwareView((before) => ({ ...before, previewProgress: 0 }));
     setSelectedConnection((before) =>
       findConnection(next.mechanics ?? emptyMechanics, before) ? before : null,
@@ -929,8 +953,51 @@ function ProjectWorkbench({
               />
             )}
             <span>{title(node.name)}</span>
-            {isAssembly && <small>{childIds.length}</small>}
           </button>
+          {Object.entries(scene?.project.variants ?? {})
+            .filter(
+              ([, choice]) => (choice.scope ?? scene?.tree.id) === node.id,
+            )
+            .map(([key, choice]) => (
+              <span key={key} className="tree-variant">
+                <select
+                  aria-label={`Variant ${choice.label}`}
+                  title={choice.label}
+                  value={variantSelection[key] ?? choice.default}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    const request = ++variantRequest.current;
+                    setVariantSelection((before) => ({
+                      ...before,
+                      [key]: value,
+                    }));
+                    void window.cadkit
+                      .setVariants({ [key]: value })
+                      .catch((error) => {
+                        if (
+                          request !== variantRequest.current ||
+                          String(error).includes("superseded")
+                        )
+                          return;
+                        setVariantSelection(
+                          scene?.project.variant_selection ?? {},
+                        );
+                        setStatus({ phase: "error", message: String(error) });
+                      });
+                  }}
+                >
+                  {choice.options.map((option) => (
+                    <option key={option} value={option}>
+                      {title(option)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} aria-hidden="true" />
+              </span>
+            ))}
+          {isAssembly && (
+            <small className="tree-count">{childIds.length}</small>
+          )}
           {failures.length > 0 && (
             <button
               className="tree-warning"
@@ -1335,7 +1402,18 @@ function ProjectWorkbench({
                 onMoveAnnotation={moveNote}
                 onPick={pick}
                 onError={setNotice}
-                onReady={(revision) => savePreview(revision)}
+                onReady={(revision) => {
+                  savePreview(revision);
+                  window.requestIdleCallback(
+                    () => {
+                      if (currentRevision.current === revision)
+                        void window.cadkit
+                          .warmVariants(revision)
+                          .catch(() => {});
+                    },
+                    { timeout: 3000 },
+                  );
+                }}
               />
             </Suspense>
           ) : (

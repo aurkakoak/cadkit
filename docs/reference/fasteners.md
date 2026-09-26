@@ -16,13 +16,17 @@ is a named role in a stack; a FastenerSite places that stack.
 | `set_screw` | `iso4026` | Drive-end to tip |
 | `hex_head_screw` | `iso4017` | Under-head shaft length |
 | `button_head_screw` | `iso7380_1` | Under-head shaft length |
+| `countersunk_screw` | `iso10642` | Flush head top to tip, including head |
 | `hex_nut` | `iso4032` | Normally omitted |
 | `plain_washer` | `iso7089` | Normally omitted |
 | `heat_set_insert` | `McMaster-Carr` | Explicit length for engagement contracts |
 
-`countersunk_screw` is rejected by the current insertion convention. You can
-still model a [CountersunkHole](design-features.md), but must not infer that
-corresponding catalogue hardware is supported.
+Countersunk screws use their flush top plane as the insertion origin. For a
+mount, use `head_recess=ck.Countersink(clearance_diameter, head_diameter)` on the
+clearance role. Its 90° conical seat leaves positive material below the recess;
+the grip is measured from the plate's outer face. Engagement checks account for
+the catalogue's actual threaded length. A laser-cut plate requires a secondary
+countersinking operation, recorded in its feature metadata.
 
 Thread strings are provider keys, such as `M3-0.5`; vendor inserts may use
 provider-specific size strings. Dimensions and simple hardware geometry are

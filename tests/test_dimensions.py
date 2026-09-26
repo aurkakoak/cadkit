@@ -117,6 +117,41 @@ def test_required_fields_and_inheritance_keep_dataclass_behaviour():
     assert dimensions.length == 30
 
 
+def test_inherited_parameter_sources_point_to_the_declaring_module(tmp_path, monkeypatch):
+    import sys
+    from types import ModuleType
+
+    sources = {
+        "dimension_source_parent": (
+            "from dataclasses import dataclass\n"
+            "import cadkit as ck\n"
+            "@dataclass(frozen=True, kw_only=True)\n"
+            "class Parent(ck.Dimensions):\n"
+            "    width: float = ck.input(10)\n"
+            "    height: float = ck.input(20)\n"
+        ),
+        "dimension_source_child": (
+            "from dimension_source_parent import Parent, dataclass, ck\n"
+            "@dataclass(frozen=True, kw_only=True)\n"
+            "class Child(Parent):\n"
+            "    height: float = ck.input(30)\n"
+        ),
+    }
+    for name, source in sources.items():
+        filename = tmp_path / f"{name}.py"
+        filename.write_text(source)
+        module = ModuleType(name)
+        module.__file__ = str(filename)
+        monkeypatch.setitem(sys.modules, name, module)
+        exec(compile(source, str(filename), "exec"), module.__dict__)
+
+    dimensions = sys.modules["dimension_source_child"].Child()
+    parameters = {p.name: p for p in dimensions.parameters()}
+    assert parameters["width"].source == str(tmp_path / "dimension_source_parent.py")
+    assert parameters["height"].source == str(tmp_path / "dimension_source_child.py")
+    assert parameters["height"].value == 30
+
+
 def test_schema_mistakes_cannot_silently_drop_inputs_or_validation():
     @dataclass(frozen=True, kw_only=True)
     class MissingDeclaration(ck.Dimensions):

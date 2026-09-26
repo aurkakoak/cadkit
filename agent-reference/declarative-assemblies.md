@@ -200,3 +200,21 @@ receiver-owned hardware follow the graph. No Part builders run during playback.
 Preview is transient and resets on rebuild. Measurements and Blender rendering
 require reset; running checks restores the installed pose. Extra fastening
 constraints can disable preview. Motion playback is not physical validation.
+
+## Construction variants
+
+Declare a choice on its owning assembly with
+`selected = assembly.variant("base", ck.Variant(("printed", "hybrid"), default="printed", label="Base"))`.
+Build the chosen local parts/assembly from `selected`. Wrap the normal project
+builder with `VARIANTS = ck.Variants(make_project)` and export
+`PROJECT = VARIANTS.project()`. Parent assemblies compose their children without
+forwarding selection arguments. Keys must be project-unique; selectors appear on
+the owning assembly's installed tree row. The original project-wide `choices=`
+form remains supported for choices that belong on the root.
+
+`VARIANTS.project(base="hybrid")`, CLI `--variant base=hybrid`, and desktop MCP
+`set_variants` select a coherent project snapshot. Use the returned new revision.
+Cached workers/scenes are bounded; idle warming fills free slots after the first
+viewport paint. Source edits invalidate all configurations. Declare non-Python
+inputs in `Variants(..., dependencies=(... ,))`; paths are relative to the desktop
+project directory or absolute. Exports record the active selection.

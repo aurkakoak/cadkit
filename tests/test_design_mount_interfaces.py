@@ -119,3 +119,36 @@ def test_embedding_rebases_only_hardware_references_and_preserves_bounds():
     interface, = embedded.interfaces(hardware_root="/host/Hardware")
     assert interface.components == ("/host/Hardware/mount/1/screw","base")
     assert interface.region().Center().toTuple() == pytest.approx((10,20,28))
+
+
+def test_countersunk_head_uses_flush_face_and_head_inclusive_length():
+    from cadkit import Countersink
+    screw = FastenerSpec('countersunk_screw', 'M3-0.5', length_mm=8)
+    shape = screw.build()
+    assert shape.BoundingBox().zmin == pytest.approx(0)
+    assert shape.BoundingBox().zmax == pytest.approx(8)
+    mount = d.ThreadedMount(d.PointPattern(), screw, 3.4,
+        pilot_diameter=2.5, thread_depth=6, hole_depth=7, minimum_engagement=4.5)
+    role = mount.clearance_side(thickness=3, head_recess=Countersink(3.4, 6))
+    plate = d.Part('plate', lambda: cq.Workplane('XY').rect(20, 20).extrude(3), d.LaserCut('steel', 3), features={'hole': role})
+    base = d.Part('base', lambda: cq.Workplane('XY').rect(20, 20).extrude(-8), d.FDM('PLA'), features={'thread': mount.threaded_side()})
+    a = d.Assembly('flush')
+    receiver = a.fix(a.add(base))
+    clamped = a.add(plate)
+    a.connect('mount', mount, through=clamped.feature('hole'), into=receiver.feature('thread'))
+    models = {c.name: c.model for c in a.components(include_hardware=True)}
+    installed, = [shape for name, shape in models.items() if name.endswith('/1/screw')]
+    assert installed.BoundingBox().zmax == pytest.approx(3)
+    assert installed.BoundingBox().zmin == pytest.approx(-5)
+    assert installed.intersect(models['plate']).Volume() < 1e-6
+    # The conical seat touches, without hiding a floating screw or interference.
+    assert installed.distance(models['plate']) < 1e-6
+    findings = a.as_project().validate_mechanics()['findings']
+    engagement = next(f for f in findings if f['code'] == 'engagement')
+    assert engagement['status'] == 'pass'
+    assert engagement['evidence']['engagement_mm'] == pytest.approx(5)
+    assert role.describe()['operations'][0]['kind'] == 'countersink'
+    with pytest.raises(ValueError, match='countersunk clearance'):
+        mount.clearance_side(thickness=3)
+    with pytest.raises(ValueError, match='positive screw seat'):
+        mount.clearance_side(thickness=1, head_recess=Countersink(3.4, 6))

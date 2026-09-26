@@ -19,7 +19,7 @@ from .export import (
 )
 
 
-def load_project(reference):
+def load_project(reference, variants=None):
     """Import a Project from a Python module reference.
 
     Args:
@@ -38,7 +38,8 @@ def load_project(reference):
     project = getattr(importlib.import_module(module), attribute or "PROJECT")
     if not isinstance(project, Project):
         raise ValueError(f"{reference} is not a cadkit.Project")
-    return project
+    from .variants import select_variants
+    return select_variants(project, variants or {})
 
 
 def main(argv=None, *, project=None):
@@ -58,6 +59,7 @@ def main(argv=None, *, project=None):
     parser.add_argument(
         "--project", default="project:PROJECT", help="importable module:Project object"
     )
+    parser.add_argument("--variant", action="append", default=[], metavar="NAME=OPTION")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser(
         "describe", help="JSON project schema, parts, dimensions, and checks"
@@ -186,13 +188,17 @@ def main(argv=None, *, project=None):
                 command += ["--animation"]
             subprocess.run(command, check=True)
             return 0
+        from .variants import parse_variants, select_variants
+        selection = parse_variants(args.variant)
         if project is None:
             # Console scripts start with the environment's bin directory on
             # sys.path. Models (including lazy imports) live in the caller's cwd.
             project_root = str(Path.cwd())
             if project_root not in sys.path:
                 sys.path.insert(0, project_root)
-            project = load_project(args.project)
+            project = load_project(args.project, selection)
+        else:
+            project = select_variants(project, selection)
         if args.command in {"mechanics", "bom"}:
             descriptions = project.mechanical_descriptions(assembly=project.get_assembly())
             print(json.dumps(descriptions["hardware_bom"] if args.command == "bom" else descriptions, indent=2))
@@ -242,9 +248,9 @@ def main(argv=None, *, project=None):
             if args.printed_only:
                 items = [component for component in items if component.part is not None]
             if args.command == "assembly":
-                export_assembly(items, args.output, exploded=args.exploded)
+                export_assembly(items, args.output, exploded=args.exploded, variant_selection=getattr(project, "variant_selection", {}))
             elif args.command == "render-assets":
-                export_render_assets(items, args.output_dir, exploded=args.exploded)
+                export_render_assets(items, args.output_dir, exploded=args.exploded, variant_selection=getattr(project, "variant_selection", {}))
             else:
                 from .viewer import show_components
 

@@ -94,7 +94,11 @@ def _input_fields(cls):
 
 
 def _source(cls, name):
-    owner = next(base for base in cls.__mro__ if name in base.__dict__.get("__annotations__", {}))
+    # Python 3.14 can store annotations lazily, outside the class dictionary.
+    # get_annotations also keeps this lookup local to each declaring class.
+    owner = next((base for base in cls.__mro__ if name in inspect.get_annotations(base)), None)
+    if owner is None:
+        return ""
     try:
         filename = inspect.getsourcefile(owner)
         return str(Path(filename).resolve()) if filename and Path(filename).is_file() else ""

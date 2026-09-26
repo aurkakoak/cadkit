@@ -179,6 +179,7 @@ def build(project, parts, directory, *, mechanical_report=None, validation_overr
     manifest = {
         "schema_version": 1,
         "project": project.name,
+        "variant_selection": dict(getattr(project, "variant_selection", {})),
         "cadquery_version": cq.__version__,
         "units": "mm",
         "tessellation": {
@@ -201,7 +202,7 @@ def build(project, parts, directory, *, mechanical_report=None, validation_overr
     return manifest
 
 
-def export_assembly(components, output, *, exploded=False):
+def export_assembly(components, output, *, exploded=False, variant_selection=None):
     """Write a named, colored installed STEP assembly and omission metadata.
 
     Args:
@@ -229,6 +230,7 @@ def export_assembly(components, output, *, exploded=False):
         {
             "schema_version": 1,
             "units": "mm",
+            "variant_selection": dict(variant_selection or {}),
             "mesh_components_omitted_from_step": omitted,
             "note": (
                 "Use preview or Blender assets for the complete mesh-inclusive assembly."
@@ -240,7 +242,7 @@ def export_assembly(components, output, *, exploded=False):
     return assembly
 
 
-def export_render_assets(components, directory, *, exploded=False):
+def export_render_assets(components, directory, *, exploded=False, variant_selection=None):
     """Write component STLs and a scene manifest for Blender presentation.
 
     Args:
@@ -283,6 +285,7 @@ def export_render_assets(components, directory, *, exploded=False):
         "schema_version": 1,
         "units": "mm",
         "exploded": exploded,
+        "variant_selection": dict(variant_selection or {}),
         "components": items,
     }
     write_json(directory / "scene.json", manifest)

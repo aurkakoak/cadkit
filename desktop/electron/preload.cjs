@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld("cadkit", {
   pickProjectPython: () => ipcRenderer.invoke("cadkit:pick-project-python"),
   saveProjectPreview: (params) =>
     ipcRenderer.invoke("cadkit:save-project-preview", params),
+  setVariants: (values) => ipcRenderer.invoke("cadkit:set-variants", values),
+  warmVariants: (revision) =>
+    ipcRenderer.invoke("cadkit:warm-variants", revision),
   rebuild: () => ipcRenderer.invoke("cadkit:rebuild"),
   measure: (params) => ipcRenderer.invoke("cadkit:measure", params),
   mechanicalReport: (params) =>

@@ -17,8 +17,13 @@ out of the receiver toward the clamped parts.** Receiver pockets extend into
 negative Z; clamped layers occupy positive Z. This convention is different
 from standalone Hole and InsertPocket features, whose +Z points into material.
 
-The outermost clearance role defines the screw seat. Its Z position is
-`offset + thickness - head_recess.depth` (zero recess when absent). Layers
+The outermost clearance role defines the screw reference plane. Its Z position is
+`offset + thickness - counterbore.depth` for a cylindrical recess, or
+`offset + thickness` without a recess. A countersunk screw also references the
+outer face: its nominal length includes the head. Use
+`head_recess=ck.Countersink(through_diameter, head_diameter)` for its 90° conical
+seat. The cone must leave positive sheet thickness below the recess; the feature
+records countersinking as a secondary manufacturing operation. Layers
 passed through `via=` must continuously cover the grip without gaps or overlaps.
 Each intermediate instance needs its own placement.
 

@@ -1,7 +1,8 @@
 """Located, simplified catalogue hardware backed by cq_warehouse.
 
 The local +Z axis is the insertion direction. A screw's origin is its under-head
-seat; its shaft points +Z and its head -Z. A set screw starts at its drive-end
+seat, except a countersunk screw starts at its flush top plane and includes its
+head in the length. A set screw starts at its drive-end
 plane and points +Z. Nuts and washers start at local Z=0.
 No host geometry is cut implicitly. Supplier-specific factories must describe
 whether they provide catalogue geometry or only an envelope.
@@ -58,8 +59,8 @@ class FastenerSpec:
             valid native Shape. Custom dimensions may be unavailable.
 
     Building never cuts host parts. Hardware has simplified geometry, not
-    helical threads. Countersunk screws are currently rejected because their
-    head-inclusive length differs from the under-head insertion convention.
+    helical threads. Countersunk screws use their top plane as the insertion
+    origin and their catalogue length includes the head.
     """
     kind: str
     size: str
@@ -80,8 +81,6 @@ class FastenerSpec:
             raise ValueError("Fastener size is required")
         if self.kind.endswith("screw") and (self.length_mm is None or not math.isfinite(self.length_mm) or self.length_mm <= 0):
             raise ValueError("Screws require a positive length_mm")
-        if self.kind == "countersunk_screw":
-            raise ValueError("Countersunk screw length includes the head; this insertion convention does not support it yet")
         if not self.standard:
             object.__setattr__(self, "standard", _CLASSES[self.kind][1])
 
@@ -178,7 +177,9 @@ class FastenerSpec:
 
         Returns:
             (cq.Shape): Screw shaft along +Z and head along -Z, with its under-head
-                seat at Z=0. A set screw starts at its drive-end plane; nuts and
+                seat at Z=0. A countersunk screw starts at its flush top plane,
+                with the head and shaft inside its nominal length along +Z.
+                A set screw starts at its drive-end plane; nuts and
                 washers start at Z=0. No installed placement is applied.
         """
         model = cq.Shape.cast(self.catalogue().wrapped)

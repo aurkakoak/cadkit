@@ -105,8 +105,8 @@ npm run smoke:package -- release/mac-arm64/CadKit.app/Contents/MacOS/CadKit
 4. Push a tag matching the version:
 
    ```sh
-   git tag v0.6.1
-   git push origin main v0.6.1
+   git tag v0.7.0
+   git push origin main v0.7.0
    ```
 
 The Release workflow tests the code, builds all four native targets, launches
