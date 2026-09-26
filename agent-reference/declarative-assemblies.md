@@ -93,6 +93,37 @@ head.access("retainer-driver", connection=retainer_connection,
 `driver_access(name, connection=..., diameter=..., length=..., obstacles=...)`
 derives straight outward tool probes from the shared pattern and screw seats.
 
+## Fasten across subsystems
+
+Publish an owned manufacturing feature when a parent needs to bind a shared
+mount across the subsystem boundary:
+
+```python
+unit.export_feature("mount", housing.feature("mount"))
+head = machine.add("head", unit)
+machine.connect("head-mount", mount,
+                through=head.feature("mount"), into=arm.feature("mount"))
+```
+
+Both roles must use the same mount object. The exported reference retains the
+leaf's original feature, including its local datum, layer dimensions and
+manufacturing operations. It follows the installed occurrence's nested placement
+and pose; generated hardware, fit interfaces and driver access use that same
+resolved datum. Fastening participants identify only the selected leaves.
+
+Re-export a nested feature with `unit.export_feature(name, nested.feature(key))`.
+Export names are unique; `exported_features` provides a read-only mapping.
+Use `fasten` when both participants already have placement parents, or `attach`
+for a feature-bound hardware recipe. Intermediate stack roles can also be
+exported and passed as `via=`. Distinct roles in one stack must identify distinct
+leaves, even when exported under different names. A placing connection still
+requires distinct immediate parent and child instances.
+
+Secondary fastenings require all role datums to coincide in the selected pose.
+The viewer disables motion whose additional fastening constraints cannot be
+represented by the placement graph. A Python pose resolves and validates those
+constraints. Exporting a feature does not change or duplicate its geometry.
+
 ## Contacts across subsystems
 
 An assembly can publish selected Part or Purchased leaves as contact participants:
@@ -158,8 +189,9 @@ inherit manufactured Part groups when omitted.
 
 ## Desktop motion preview
 
-The inspector's **Motion** controls adjust revolute angles and play independent
-joints at signed rpm. Coupled joints follow their drivers; playback stops at limits.
+The inspector's **Motion** controls adjust revolute angles in degrees and slider
+positions in millimetres. Independent joints play at signed rpm or mm/s
+respectively. Coupled joints follow their drivers; playback stops at limits.
 The framework supplies `Assembly.motion_graph()` and directed parent/child metadata,
 so clients do not infer moving parts from names or edit geometry. Its column-major
 millimetre matrices transform installed display meshes; nested descendants and

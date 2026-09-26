@@ -11,7 +11,7 @@ not already have it. Then run:
 ```sh
 uv init --python 3.12 cadkit-box
 cd cadkit-box
-uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.5.3"
+uv add "cadkit[desktop] @ git+https://github.com/aurkakoak/cadkit.git@v0.6.0"
 ```
 
 This installs CadKit, CadQuery and the Python dependencies needed to open this
