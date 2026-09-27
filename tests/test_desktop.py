@@ -40,6 +40,93 @@ def test_hierarchy_preserves_instances_and_part_metadata():
     assert len(leaf["shape"]["face_types"]) == 6
 
 
+def test_shared_geometry_is_meshed_once_with_distinct_placements_and_colors():
+    first = cq.Workplane("XY").box(10, 20, 30).val()
+    location = cq.Location((40, 50, 60), (0, 0, 1), 90)
+    second = first.moved(location)
+    nodes = (Component("first", first, "fixture", color=(1, 0, 0)),
+             Component("second", second, "fixture", color=(0, 1, 0)))
+    project = Project("fixture", (), lambda: nodes)
+    session = Session(project)
+    scene = session.scene()
+    a, b = scene["shapes"]["parts"][0]["parts"]
+    assert a["shape"] is b["shape"]
+    assert a["color"] != b["color"]
+    assert a["id"] != b["id"]
+    # Verify rendered vertex placement independently of native measurements.
+    from ocp_tessellate.ocp_utils import tq_to_loc
+    import numpy as np
+    transform = cq.Matrix(tq_to_loc(*b["loc"]).Transformation())
+    vertices = np.asarray([cq.Vector(*v).transform(transform).toTuple()
+                           for v in b["shape"]["vertices"].reshape(-1, 3)])
+    assert vertices.min(axis=0) == pytest.approx(scene["components"][1]["bounds"][0])
+    assert vertices.max(axis=0) == pytest.approx(scene["components"][1]["bounds"][1])
+    assert session.models[scene["components"][1]["id"]].isSame(second)
+    assert scene["performance"]["unique_native_shapes"] == 1
+    assert scene["performance"]["native_component_count"] == 2
+    assert session.scene() is scene
+
+
+def test_scene_timings_cover_build_and_preserve_cached_report():
+    session = Session(fixture_project())
+    scene = session.scene()
+    report = scene["performance"]
+    assert all(value >= 0 for value in report["stages_seconds"].values())
+    assert report["stages_seconds"]["scene"] >= report["stages_seconds"]["assembly"]
+    assert {"assembly", "convert", "tessellate", "bounds", "volume", "describe", "mechanics"} <= report["stages_seconds"].keys()
+    assert session.scene()["performance"] == report
+
+
+@pytest.mark.parametrize("mesh_second", [False, True])
+def test_transport_roundtrips_viewer_buffers_and_preserves_native_snapshot(mesh_second):
+    import base64
+    import json
+    import numpy as np
+    from cadkit.desktop import json_default
+    session = Session(fixture_project(mesh_second))
+    original = session.scene()
+    wire = session.scene_for_transport()
+    assert session.scene_for_transport() is wire
+    assert session.scene() is original
+    assert wire["shapes"] is not original["shapes"]
+    assert wire["components"] == original["components"]
+    packed = json.loads(json.dumps(wire, default=json_default))["shapes"]
+
+    def compare(before, after):
+        assert before["id"] == after["id"]
+        assert json.loads(json.dumps(before.get("loc"))) == after.get("loc")
+        if "shape" in before:
+            assert "ref" not in before["shape"]
+            encoded = packed["instances"][after["shape"]["ref"]]
+            for field, values in before["shape"].items():
+                buffer = encoded[field]
+                dtype = np.dtype(buffer["dtype"]).newbyteorder("<")
+                assert buffer["codec"] == "b64"
+                decoded = np.frombuffer(base64.b64decode(buffer["buffer"]), dtype=dtype)
+                np.testing.assert_array_equal(decoded, np.asarray(values, dtype=dtype).ravel())
+        for child, packed_child in zip(before.get("parts", []), after.get("parts", [])):
+            compare(child, packed_child)
+
+    compare(original["shapes"], packed["shapes"])
+
+
+def test_transport_keeps_partial_edge_buffers_inline():
+    edge = Component("edge", cq.Edge.makeLine((0, 0, 0), (10, 0, 0)), "fixture")
+    session = Session(Project("fixture", (), lambda: [edge]))
+    packed = session.scene_for_transport()["shapes"]
+    leaf = packed["shapes"]["parts"][0]["parts"][0]
+    assert leaf["type"] == "edges"
+    assert "ref" not in leaf["shape"]
+    assert leaf["shape"]["edges"]["dtype"] == "float32"
+
+
+def test_packed_transport_rejects_nonfinite_display_buffers():
+    import numpy as np
+    from cadkit.desktop import encode_scene
+    with pytest.raises(ValueError, match="Non-finite vertices"):
+        encode_scene({"type": "shapes", "shape": {"vertices": np.array([float("nan"), 0, 0])}})
+
+
 @pytest.mark.parametrize("mesh_second", [False, True])
 def test_distance_uses_world_coordinates_and_discloses_mesh_boundary(mesh_second):
     session = Session(fixture_project(mesh_second))

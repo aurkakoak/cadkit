@@ -99,6 +99,13 @@ test("variants restore native geometry, survive failure, and invalidate on edits
       )
       .toBe(true);
     expect(current.revision).not.toBe(first.revision);
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.cadkit.load())).scene?.performance
+            ?.viewport_cached,
+      )
+      .toBe(true);
     expect(await countSmall()).toBe(count);
     await selector.selectOption("hybrid");
     await expect(selector).toHaveValue("hybrid");

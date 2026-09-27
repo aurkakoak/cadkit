@@ -13,6 +13,7 @@ from typing import Callable
 from urllib.parse import quote
 import cadquery as cq
 from .geometry import Mesh, shape
+from .performance import measure
 from .fasteners import FastenerSpec, HardwareItem, FastenerSite, vector
 
 
@@ -261,7 +262,8 @@ def hardware_assembly(fastenings):
             for item in fastening.hardware:
                 cache_key = (item.spec.id, id(item.spec.factory))
                 if cache_key not in built:
-                    built[cache_key] = item.spec.build()
+                    with measure("hardware", item.spec.id):
+                        built[cache_key] = item.spec.build()
                 offset = tuple(-x * fastening.insertion_distance_mm for x in site.axis)
                 model = site.place(built[cache_key], item.offset_mm)
                 hardware.append(Component(item.name, model, "Hardware", color=(0.58, 0.62, 0.66), material="hardware", explode=offset,

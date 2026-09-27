@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld("cadkit", {
   setVariants: (values) => ipcRenderer.invoke("cadkit:set-variants", values),
   warmVariants: (revision) =>
     ipcRenderer.invoke("cadkit:warm-variants", revision),
+  viewportReady: (metrics) =>
+    ipcRenderer.invoke("cadkit:viewport-ready", metrics),
   rebuild: () => ipcRenderer.invoke("cadkit:rebuild"),
   measure: (params) => ipcRenderer.invoke("cadkit:measure", params),
   mechanicalReport: (params) =>

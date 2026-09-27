@@ -6,6 +6,7 @@ import math
 import cadquery as cq
 from .._project import Part as FabricationPart
 from ..geometry import Mesh, normalized_to_bed
+from ..performance import measure
 from .frames import Frame, name
 
 
@@ -113,7 +114,8 @@ def apply_features(name, body, features):
         raise ValueError(f"{name}: Mesh bodies do not support native manufacturing features; use ports for attachment datums")
     for key, feature in features.items():
         try:
-            body = native(feature.apply(body))
+            with measure("feature", f"{name}/{key}"):
+                body = native(feature.apply(body))
         except Exception as exc:
             raise ValueError(f"{name}/features/{key}: {exc}") from exc
     return body

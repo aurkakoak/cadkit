@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Display, Viewer } from "three-cad-viewer";
+import {
+  Display,
+  Viewer,
+  isInstancedFormat,
+  decodeInstancedFormat,
+} from "three-cad-viewer";
 import {
   AnnotationOverlay,
   type AnnotationOverlayApi,
@@ -34,6 +39,7 @@ import type {
   Annotation,
   ViewportApi,
   Vector,
+  ViewportTimings,
 } from "./types";
 
 import type { MotionPlayer } from "./motion";
@@ -60,7 +66,7 @@ interface Props {
   onMoveAnnotation: (id: string, offset: [number, number]) => void;
   onPick: (id: string, multiple: boolean) => void;
   onError: (message: string) => void;
-  onReady?: (revision: string) => void;
+  onReady?: (revision: string, timings: ViewportTimings) => void;
 }
 
 export function Viewport(props: Props) {
@@ -121,11 +127,20 @@ export function Viewport(props: Props) {
 
   useEffect(() => {
     if (!ready) return;
+    const revision = props.scene.revision;
     let second = 0;
     const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() =>
-        latest.current.onReady?.(latest.current.scene.revision),
-      );
+      second = requestAnimationFrame(() => {
+        const timing = viewTiming.current;
+        if (timing?.revision === revision)
+          latest.current.onReady?.(revision, {
+            clone_seconds: timing.clone_seconds,
+            decode_seconds: timing.decode_seconds,
+            render_seconds: timing.render_seconds,
+            viewport_seconds: (performance.now() - timing.started) / 1000,
+            viewport_cached: timing.cached,
+          });
+      });
     });
     return () => {
       cancelAnimationFrame(first);
@@ -218,7 +233,17 @@ export function Viewport(props: Props) {
     [],
   );
 
+  const viewTiming = useRef<{
+    revision: string;
+    started: number;
+    clone_seconds: number;
+    decode_seconds: number;
+    render_seconds: number;
+    cached: boolean;
+  } | null>(null);
+
   useEffect(() => {
+    const started = performance.now();
     try {
       const camera = instance.current?.getCameraLocationSettings();
       const key = props.scene.geometry_revision ?? props.scene.revision;
@@ -237,9 +262,21 @@ export function Viewport(props: Props) {
       prepared.container.style.display = "block";
       const viewer = prepared.viewer;
       instance.current = viewer;
-      if (!cached)
+      let cloneSeconds = 0;
+      let decodeSeconds = 0;
+      let renderSeconds = 0;
+      if (!cached) {
+        const cloneStarted = performance.now();
+        const cloned = structuredClone(props.scene.shapes);
+        cloneSeconds = (performance.now() - cloneStarted) / 1000;
+        const decodeStarted = performance.now();
+        const shapes = isInstancedFormat(cloned)
+          ? decodeInstancedFormat(cloned)
+          : cloned;
+        decodeSeconds = (performance.now() - decodeStarted) / 1000;
+        const renderStarted = performance.now();
         viewer.render(
-          structuredClone(props.scene.shapes),
+          shapes,
           {
             ambientIntensity: 1.4,
             directIntensity: 1.2,
@@ -256,6 +293,8 @@ export function Viewport(props: Props) {
             transparent: false,
           },
         );
+        renderSeconds = (performance.now() - renderStarted) / 1000;
+      }
       while (views.current.size > 3) {
         const oldest = views.current.keys().next().value!;
         views.current.get(oldest)!.dispose();
@@ -282,6 +321,14 @@ export function Viewport(props: Props) {
           camera.zoom,
         );
       else viewer.presetCamera("iso");
+      viewTiming.current = {
+        revision: props.scene.revision,
+        started,
+        clone_seconds: cloneSeconds,
+        decode_seconds: decodeSeconds,
+        render_seconds: renderSeconds,
+        cached,
+      };
       setReady((value) => value + 1);
     } catch (error) {
       latest.current.onError(`Viewport: ${String(error)}`);

@@ -14,9 +14,11 @@ import cadquery as cq
 
 from .._project import Assembly as PlacedAssembly, Component, Project as ProjectRecord
 from ..geometry import Mesh
+from ..performance import measure
 from ..mechanics import Joint, Interface, AccessEnvelope, hardware_assembly
 from .frames import Frame, name as valid_name
 from .parts import Part, native
+from ..geometry_cache import cached_body
 from .purchased import Purchased
 from .motion import Rigid, Revolute, Slider
 
@@ -1258,7 +1260,8 @@ class Resolution:
                 continue
             key = id(instance.part)
             if key not in bodies:
-                bodies[key] = instance.part.build()
+                with measure("geometry", self._id(path)):
+                    bodies[key] = cached_body(self._id(path), instance.part.build)
             result[path] = Component(instance.name, bodies[key].moved(location),
                 instance.group or ("Purchased" if purchased else "parts"),
                 color=instance.color or ((0.58, 0.62, 0.66) if purchased else (0.23, 0.27, 0.3)),

@@ -42,6 +42,16 @@ current geometry and revision. A failed build keeps the last working model,
 so visible geometry does not establish that an edit succeeded. Geometry tools
 require the current revision returned by `get_state`.
 
+Unchanged declarative projects reuse native part geometry from a persistent
+disk cache. Source, declared inputs, variants and runtime changes invalidate it.
+Set `CADKIT_GEOMETRY_CACHE=0` to disable it; cache location, limits and the
+deterministic-builder contract are covered in
+[native caching](../contributing/performance.md#persistent-native-geometry).
+
+`get_state.performance` reports build phases, slow parts/features, scene transfer,
+viewport timings, native-cache hits/misses and peak worker memory. See [performance diagnostics](../contributing/performance.md)
+for field definitions and a repeatable benchmark command.
+
 ## MCP connection
 
 Open the app and use its **plug icon** to copy the configuration for that exact

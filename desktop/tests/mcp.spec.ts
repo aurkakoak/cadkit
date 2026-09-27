@@ -103,6 +103,16 @@ output.write_text('; filament used [g] = 12.5\\n; estimated printing time (norma
       ]),
     );
     const state = await call("get_state");
+    await expect
+      .poll(async () => (await call("get_state")).performance?.viewport_seconds)
+      .toBeGreaterThanOrEqual(0);
+    const timings = (await call("get_state")).performance;
+    expect(timings.worker_seconds).toBeGreaterThan(
+      timings.stages_seconds.scene,
+    );
+    expect(timings.response_bytes).toBeGreaterThan(0);
+    expect(timings.render_seconds).toBeGreaterThanOrEqual(0);
+    expect(timings.viewport_cached).toBe(false);
     expect(state.components).toHaveLength(2);
     expect(state.project.parts[0].quantity).toBe(2);
     expect(state).not.toHaveProperty("shapes");

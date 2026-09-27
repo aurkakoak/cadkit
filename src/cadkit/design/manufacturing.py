@@ -7,6 +7,9 @@ remain visible independently of nominal dimensions in inspection reports.
 from dataclasses import dataclass
 import math
 import cadquery as cq
+from OCP.BOPAlgo import BOPAlgo_CellsBuilder
+from OCP.TopTools import TopTools_ListOfShape
+from ..performance import measure
 from .frames import Frame, positive
 
 _OVERSHOOT = 0.1
@@ -20,17 +23,51 @@ def _describe_pattern(pattern):
     return pattern.describe() if pattern is not None else {"kind": "points", "points": ((0, 0),)}
 
 
+def _shape_list(shapes):
+    result = TopTools_ListOfShape()
+    for shape in shapes:
+        result.Append(shape.wrapped)
+    return result
+
+
 def _cut(body, sites):
-    """Require every declared site to remove material, with valid output."""
-    cutters = []
-    for i, site in enumerate(sites):
-        for cutter in site:
-            if body.intersect(cutter).Volume() <= 1e-7:
-                raise ValueError(f"Feature site {i+1} does not intersect the part body")
-            cutters.append(cutter)
-    result = body.cut(*cutters).clean()
-    if not result.isValid() or not result.Solids() or result.Volume() >= body.Volume() - 1e-7:
-        raise ValueError("Manufacturing feature did not produce a valid material-removing cut")
+    """Validate each cutter and subtract them using one shared intersection pass.
+
+    OCCT's cells builder partitions the arguments once. Selecting cells inside
+    both the body and each cutter gives its exact intersection; selecting body
+    cells outside every cutter gives the cut. Other cutters partition a site's
+    intersection but do not remove material from it during validation.
+    """
+    sites = tuple(tuple(site) for site in sites)
+    cutters = [cutter for site in sites for cutter in site]
+    failure = "Manufacturing feature did not produce a valid material-removing cut"
+    if not cutters:
+        raise ValueError(failure)
+    with measure("boolean_prepare"):
+        builder = BOPAlgo_CellsBuilder()
+        builder.SetArguments(_shape_list([body, *cutters]))
+        builder.SetRunParallel(True)
+        # Reusable definition bodies and cutters must not acquire kernel edits.
+        builder.SetNonDestructive(True)
+        builder.Perform()
+        if builder.HasErrors():
+            raise ValueError(failure)
+    with measure("boolean_check_sites"):
+        for i, site in enumerate(sites):
+            for cutter in site:
+                builder.AddToResult(_shape_list([body, cutter]), _shape_list([]))
+                if builder.HasErrors():
+                    raise ValueError(failure)
+                if cq.Shape.cast(builder.Shape()).Volume() <= 1e-7:
+                    raise ValueError(f"Feature site {i+1} does not intersect the part body")
+                builder.RemoveAllFromResult()
+    with measure("boolean_finish"):
+        builder.AddToResult(_shape_list([body]), _shape_list(cutters))
+        if builder.HasErrors():
+            raise ValueError(failure)
+        result = cq.Shape.cast(builder.Shape()).clean()
+        if not result.isValid() or not result.Solids() or result.Volume() >= body.Volume() - 1e-7:
+            raise ValueError(failure)
     return result
 
 

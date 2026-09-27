@@ -166,6 +166,7 @@ async function executeTool(session, method, raw) {
       tree: snapshot.tree,
       components: snapshot.components,
       mechanics: snapshot.mechanics,
+      performance: snapshot.performance,
       mechanicalReport,
       status,
       projectDir,
@@ -277,6 +278,8 @@ class Worker {
     this.pending = new Map();
     this.log = "";
     this.closed = false;
+    this.started = performance.now();
+    this.performance = {};
     this.process = spawn(
       python,
       [
@@ -292,7 +295,12 @@ class Worker {
       ],
       {
         cwd: projectDir,
-        env: { ...workerEnv },
+        env: {
+          ...workerEnv,
+          CADKIT_GEOMETRY_CACHE_DIR:
+            workerEnv.CADKIT_GEOMETRY_CACHE_DIR ??
+            path.join(app.getPath("userData"), "cache", "geometry"),
+        },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       },
@@ -303,16 +311,33 @@ class Worker {
     const lines = createInterface({ input: this.process.stdout });
     lines.on("line", (line) => {
       let response;
+      const parseStarted = performance.now();
       try {
         response = JSON.parse(line);
       } catch {
         this.fail(new Error("Invalid response from CAD worker"));
         return;
       }
+      const parseSeconds = (performance.now() - parseStarted) / 1000;
+      if (response.event === "ready") {
+        this.performance.worker_ready_seconds =
+          (performance.now() - this.started) / 1000;
+        this.performance.occt_threads = response.occt_threads;
+        return;
+      }
+      if (response.event === "performance") {
+        this.performance.serialize_seconds = response.serialize_seconds;
+        this.performance.response_bytes = response.response_bytes;
+        this.performance.peak_rss_bytes = response.peak_rss_bytes;
+        return;
+      }
       if (response.event === "inputs") {
         if (active === session && !session.closed) {
           for (const file of response.paths) session.inputs.add(file);
           session.watcher?.add(response.paths);
+          // Source directories detect new/shadowing modules. Keep them out of
+          // declared inputs so non-Python build outputs remain ignored.
+          session.watcher?.add(response.source_roots ?? []);
         }
         return;
       }
@@ -331,8 +356,15 @@ class Worker {
       this.pending.delete(response.id);
       if (response.error) request.reject(new Error(response.error));
       else {
-        if (request.method === "scene")
+        if (request.method === "scene") {
           this.nativeRevision = response.result.revision;
+          response.result.performance = {
+            ...response.result.performance,
+            ...this.performance,
+            worker_seconds: (performance.now() - this.started) / 1000,
+            parse_seconds: parseSeconds,
+          };
+        }
         const result = response.result;
         request.resolve(
           request.revision && result?.revision
@@ -448,6 +480,7 @@ function createBuildCache(session) {
       assertSession(session);
       session.current = entry.worker;
       session.candidate = undefined;
+      session.activationStarted = performance.now();
       // A cached build gets a new activation revision: old A requests cannot
       // become current again after A → B → A.
       const next = {
@@ -456,6 +489,7 @@ function createBuildCache(session) {
         geometry_revision: entry.scene.revision,
         source_generation: session.cache.generation,
         cached,
+        performance: { ...entry.scene.performance },
       };
       session.snapshot = next;
       session.selection = { ...(next.project.variant_selection ?? {}) };
@@ -937,6 +971,24 @@ handle("cadkit:warm-variants", (revision) => {
   const session = requireSession();
   checkRevision(session, revision);
   if (session.status.phase === "ready") return session.cache.prewarm();
+});
+handle("cadkit:viewport-ready", ({ revision, ...metrics }) => {
+  const session = requireSession();
+  if (session.snapshot?.revision !== revision) return;
+  const keys = [
+    "clone_seconds",
+    "decode_seconds",
+    "render_seconds",
+    "viewport_seconds",
+  ];
+  if (keys.some((key) => !Number.isFinite(metrics[key]) || metrics[key] < 0))
+    throw new Error("Invalid viewport timings");
+  session.snapshot.performance = {
+    ...session.snapshot.performance,
+    ...Object.fromEntries(keys.map((key) => [key, metrics[key]])),
+    viewport_cached: Boolean(metrics.viewport_cached),
+    activation_seconds: (performance.now() - session.activationStarted) / 1000,
+  };
 });
 handle("cadkit:open-link", (value) => {
   const url = new URL(checkedString(value, "link"));

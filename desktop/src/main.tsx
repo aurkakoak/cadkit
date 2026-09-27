@@ -1402,7 +1402,10 @@ function ProjectWorkbench({
                 onMoveAnnotation={moveNote}
                 onPick={pick}
                 onError={setNotice}
-                onReady={(revision) => {
+                onReady={(revision, timings) => {
+                  void window.cadkit
+                    .viewportReady({ revision, ...timings })
+                    .catch(() => {});
                   savePreview(revision);
                   window.requestIdleCallback(
                     () => {

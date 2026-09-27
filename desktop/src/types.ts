@@ -8,7 +8,7 @@ export interface RenderJob {
   message: string;
   log: string;
 }
-import type { Shapes } from "three-cad-viewer";
+import type { Shapes, decodeInstancedFormat } from "three-cad-viewer";
 export type Theme = "dark" | "light";
 export type Vector = [number, number, number];
 export interface Annotation {
@@ -124,12 +124,45 @@ export interface Assembly {
   children: TreeNode[];
 }
 export type TreeNode = Component | Assembly;
+export interface ViewportTimings {
+  clone_seconds: number;
+  decode_seconds: number;
+  render_seconds: number;
+  viewport_seconds: number;
+  viewport_cached: boolean;
+}
+export interface BuildPerformance extends Partial<ViewportTimings> {
+  stages_seconds: Record<string, number>;
+  operations: { stage: string; name: string; seconds: number; calls: number }[];
+  worker_ready_seconds?: number;
+  worker_seconds?: number;
+  serialize_seconds?: number;
+  parse_seconds?: number;
+  response_bytes?: number;
+  peak_rss_bytes?: number | null;
+  component_count?: number;
+  native_component_count?: number;
+  unique_native_shapes?: number;
+  geometry_cache?: {
+    status: string;
+    hits?: number;
+    misses?: number;
+    writes?: number;
+    uncacheable?: number;
+    corruptions?: number;
+    bytes_read?: number;
+    bytes_written?: number;
+  };
+  occt_threads?: number;
+  activation_seconds?: number;
+}
 export interface Snapshot {
   revision: string;
-  shapes: Shapes;
+  shapes: Shapes | Parameters<typeof decodeInstancedFormat>[0];
   tree: Assembly;
   components: Component[];
   build_seconds: number;
+  performance?: BuildPerformance;
   cached?: boolean;
   geometry_revision?: string;
   source_generation?: number;
@@ -229,6 +262,9 @@ declare global {
       }>;
       rebuild(): Promise<Snapshot>;
       warmVariants(revision: string): Promise<void>;
+      viewportReady(
+        metrics: ViewportTimings & { revision: string },
+      ): Promise<void>;
       setVariants(
         values: Record<string, string>,
       ): Promise<{ revision: string; cached: boolean }>;

@@ -130,6 +130,7 @@ nav:
   - Contributing:
       - Writing documentation: contributing/documentation.md
       - API design principles: contributing/api-design.md
+      - Desktop performance: contributing/performance.md
       - Releases and publishing: contributing/releases.md
       - Trial bundles: contributing/trials.md
 validation:
