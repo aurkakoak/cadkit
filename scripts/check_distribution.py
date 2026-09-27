@@ -62,7 +62,9 @@ def check(artifact: Path, python: str) -> None:
             subprocess.run(["uv", *arguments], cwd=consumer, env=environment, check=True)
 
         print(f"Checking {artifact.name} with Python {python}", flush=True)
-        run("init", "--bare", "--no-workspace", "--vcs", "none", "--python", python)
+        # Random temporary directory names are not always valid package names.
+        run("init", "--name", "cadkit-install-check", "--bare", "--no-workspace",
+            "--vcs", "none", "--python", python)
         run("python", "pin", python)
         run("add", str(artifact))
         run("run", "--locked", "python", "-I", "-c", SMOKE)
