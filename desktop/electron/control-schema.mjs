@@ -27,6 +27,53 @@ const validationOverride = z
     "Explicit reason for exporting despite assembly failures; saved with the artifact report. Read mechanical_report first.",
   );
 export const definitions = {
+  present_review: {
+    description:
+      "Present concise findings as attached notes in the model and assembly tree. Upserts only the supplied note IDs, preserves other notes and selection, highlights participants, and optionally reveals and frames them. All targets are validated before changing the view. Prefer this for a visual design review; use annotate for free coordinate arrows.",
+    schema: z.object({
+      revision,
+      notes: z
+        .array(
+          z.object({
+            id: z.string().min(1).max(80),
+            target: z.string().min(1),
+            text: z.string().min(1).max(8000),
+            color,
+            offset: z
+              .tuple([
+                z.number().finite().min(-5000).max(5000),
+                z.number().finite().min(-5000).max(5000),
+              ])
+              .optional(),
+          }),
+        )
+        .min(1)
+        .max(30)
+        .refine(
+          (notes) => new Set(notes.map((n) => n.id)).size === notes.length,
+          "Note IDs must be unique",
+        ),
+      focus: z.boolean().default(true),
+    }),
+  },
+  section_view: {
+    description:
+      "Generate a 2D section or wireframe projection from current installed native geometry and optionally show it in the app. Use component or assembly IDs from get_state. XY displays X/Y, XZ X/Z, YZ Y/Z; offset is the world coordinate along the omitted axis in mm. Projection includes all edges, including hidden edges. Curves are sampled at tolerance (mm), not exact drawing exports or proof of fit. show=false returns geometry without changing the view. Meshes are rejected explicitly.",
+    schema: z.object({
+      revision,
+      ids: ids.min(1),
+      mode: z.enum(["section", "projection"]).default("section"),
+      plane: z.enum(["XY", "XZ", "YZ"]).default("XY"),
+      offset: z.number().finite().default(0),
+      tolerance: z.number().finite().min(0.001).max(1).default(0.05),
+      show: z.boolean().default(true),
+    }),
+  },
+  clear_section_view: {
+    description:
+      "Close the 2D review view, preserving notes, camera and selection.",
+    schema: z.object({}),
+  },
   set_variants: {
     description:
       "Select design alternatives from get_state.project.variants. Builds or restores a cached configuration and returns its new revision. Unspecified choices retain their current values.",

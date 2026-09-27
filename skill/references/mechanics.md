@@ -62,9 +62,6 @@ cutter = site.place(screw.clearance_cutter(8, fit="Normal", allowance_mm=0.1))
 
 `dimensions()`, `clearance_diameter()` and `catalogue()` expose provider data.
 Allowance is a diameter adjustment separate from the nominal catalogue size.
-The cq_warehouse revision is pinned in pyproject.toml. Its plain-washer geometry
-is incompatible with CadQuery 2.8; a narrow adapter constructs a valid annulus
-from the provider's d1/d2/h dimensions. Other families retain provider geometry.
 
 Supplier-specific factories are supported by `FastenerSpec(factory=...)` with
 manufacturer, part_number and representation. Mark a simplified supplier model
@@ -152,12 +149,9 @@ tests and domain-specific checks remain necessary.
 
 ## Desktop and MCP
 
-Connections exposes all three concepts, their participants and linked contracts.
-Selecting a fastening shows its hardware stack and quantities. Hardware visibility
-has All, Selected and Hidden modes, composed with normal eye controls and solo.
-Assembly preview scrubs hardware along declared insertion offsets. It is
-presentation only; reset it to the installed pose before native measurement.
-Dark/light themes, annotations and screenshot capture work in this view.
+Use [shared review](interaction.md) for the app connection and attached findings.
+Hardware preview moves items along insertion offsets for presentation; reset it
+to the installed pose before native measurement.
 
 Use `get_state` first. Its `mechanics` contains resolved joints/interfaces/
 fastenings and `hardware_bom`; `selectedConnection`, `hardwareView`, `presentation`

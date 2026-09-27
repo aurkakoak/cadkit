@@ -222,6 +222,35 @@ async function executeTool(session, method, raw) {
             : "pass",
     };
   }
+  if (method === "section_view") {
+    const ui = await control(session, "get_state");
+    if (ui.presentation?.pose !== "installed")
+      throw new Error(
+        "Return to the installed pose before generating a 2D view",
+      );
+    const nodes = new Map();
+    const collect = (node) => {
+      const leaves =
+        node.kind === "component" ? [node.id] : node.children.flatMap(collect);
+      nodes.set(node.id, leaves);
+      return leaves;
+    };
+    collect(snapshot.tree);
+    const ids = [
+      ...new Set(
+        params.ids.flatMap((id) => {
+          if (!nodes.has(id))
+            throw new Error(`Unknown component or assembly: ${id}`);
+          return nodes.get(id);
+        }),
+      ),
+    ];
+    const { show, ...request } = params;
+    const result = await current.call("section_view", { ...request, ids });
+    checkRevision(session, params.revision);
+    if (show) await control(session, "show_section_view", result);
+    return result;
+  }
   if (method === "measure") {
     const ui = await control(session, "get_state");
     if (ui.hardwareView?.previewProgress > 0)

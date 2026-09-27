@@ -23,14 +23,12 @@ def public_documents() -> list[Path]:
 def reference_path(source: Path) -> Path:
     if source.is_relative_to(AGENT_SOURCES):
         return REFERENCES / source.relative_to(AGENT_SOURCES)
-    if source == ROOT / "desktop" / "README.md":
-        return REFERENCES / "desktop.md"
     return REFERENCES / source.relative_to(ROOT)
 
 
 def generated_references() -> dict[Path, bytes]:
     """Copy agent guidance and its local link targets into a standalone skill."""
-    pending = [*sorted(AGENT_SOURCES.glob("*.md")), ROOT / "desktop" / "README.md"]
+    pending = sorted(AGENT_SOURCES.glob("*.md"))
     generated: dict[Path, bytes] = {}
     while pending:
         source = pending.pop()
@@ -46,14 +44,8 @@ def generated_references() -> dict[Path, bytes]:
             if url.scheme or url.netloc or not url.path or url.path.startswith("/"):
                 return match[0]
             target = (source.parent / unquote(url.path)).resolve()
-            # The desktop README links to human guides. Keep the installed skill
-            # self-contained with its task-oriented equivalents, and link other
-            # human pages to the published book rather than copying autodoc markup.
-            equivalents = {
-                ROOT / "docs/how-to/install.md": AGENT_SOURCES / "install.md",
-                ROOT / "docs/reference/mechanics.md": AGENT_SOURCES / "mechanics.md",
-            }
-            target = equivalents.get(target, target)
+            # Agent modules link to one another explicitly. Human documentation
+            # stays in the published book instead of inflating the skill bundle.
             if not target.is_relative_to(ROOT) or not target.is_file() or target.name.endswith(".local.md"):
                 raise ValueError(f"Unpublishable documentation link in {source.relative_to(ROOT)}: {match[2]}")
             if target.is_relative_to(ROOT / "docs"):

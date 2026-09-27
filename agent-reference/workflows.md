@@ -1,15 +1,10 @@
-# Build, view, render and slice
+# Fabrication and rendering
 
-Run these from the consumer root after installing the consumer package and
-CadKit. Substitute the consumer's import reference and use the same Python
-environment throughout. `--project` is a global option before the subcommand.
+Run from the consumer root with its configured Python and import reference.
+`--project` is a global option before the subcommand.
 
 ```sh
-.venv/bin/cadkit --project my_cad.project:PROJECT describe
-.venv/bin/cadkit --project my_cad.project:PROJECT list --json
-.venv/bin/cadkit --project my_cad.project:PROJECT inspect plate
 .venv/bin/cadkit --project my_cad.project:PROJECT build all
-.venv/bin/cadkit --project my_cad.project:PROJECT check
 .venv/bin/cadkit --project my_cad.project:PROJECT assembly --output build/machine.step
 .venv/bin/cadkit --project my_cad.project:PROJECT assembly --view service --output build/service.step
 ```
@@ -21,29 +16,8 @@ A partial build replaces that directory's manifest with exactly the selected
 set, even if older artifacts remain. Use separate output directories for sets
 you need to retain. There is no successful new manifest for a failed build.
 
-## Preview and desktop
-
-```sh
-.venv/bin/cadkit --project my_cad.project:PROJECT preview
-.venv/bin/cadkit --project my_cad.project:PROJECT preview --screenshot build/preview.png --no-interact
-```
-
-This preview is the CadQuery/VTK viewer. `--no-interact` avoids the interactive
-loop, but may still require a display/OpenGL environment. The Electron desktop
-is launched separately as described in [installation](install.md); it uses
-three-cad-viewer, with native geometry retained in its Python worker.
-
-For MCP, launch the desktop then use its plug button's connection configuration.
-The supplied `desktop/electron/mcp.mjs` is a standard stdio server requiring
-Node and installed desktop npm dependencies. Read `get_state` for IDs and the
-current revision before changing geometry-dependent view state. MCP sees the
-actual open window; it does not create an independent CAD session. Measurement
-is between whole components, with native distance or a labelled mesh
-approximation. Parameters are descriptive today; edits still happen in Python.
-
-The release's desktop reference documents all tools, Markdown annotations,
-camera control, screenshots, solo visibility and slicing. The same document is
-included as `references/desktop.md` in the packaged skill.
+For in-app inspection, use [shared review](interaction.md). File schemas and
+units are in [contracts](contracts.md).
 
 ## Blender
 
@@ -95,8 +69,13 @@ manifest before forwarding slicer arguments, including `--help`.
 Each run uses one filament profile. Slice different materials separately.
 Quantities multiply per-Part estimates; they do not simulate packed plates.
 Retain outputs with `--artifact-dir`. CLI and desktop slicing never submit a
-print job. The desktop Print panel saves its executable/profile choices locally
-and provides background jobs, cancellation and artifact opening.
+print job.
+
+In the app, read `slicer_settings`, then use `slice_parts` and monitor its job with
+`slice_status`. Profiles are chosen in the Print panel; MCP cannot set their
+filesystem paths. `prepare_parts` opens exported STLs in the slicer for manual
+preparation. Match the intended Part print poses, quantities and materials;
+report costs and durations as estimates.
 
 ## Assembly review
 

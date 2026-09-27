@@ -16,7 +16,7 @@ Do not weaken checks just because the integration uses different abstractions.
 
 ## Define parts and their placement
 
-Install the supplied CadKit package using [installation](install.md). Introduce
+Use the configured runtime, or [set it up](install.md) if absent. Introduce
 an importable `PROJECT = assembly.as_project(...)` using [the API contract](api.md).
 Reuse existing local body builders and express installed placement as fixed Frames
 or connections. Preserve one authoritative definition for each manufactured part.

@@ -134,6 +134,11 @@ def main(argv=None, *, project=None):
                 json.dumps(
                     {
                         "python": sys.version.split()[0],
+                        "python_executable": sys.executable,
+                        "cadkit_source": str(Path(__file__).resolve().parent),
+                        "desktop_tessellator": importlib.util.find_spec("ocp_tessellate") is not None,
+                        "node": shutil.which("node"),
+                        "desktop_launcher": shutil.which("cadkit-desktop"),
                         "cadquery": cq.__version__,
                         "tools": {
                             name: shutil.which(name)

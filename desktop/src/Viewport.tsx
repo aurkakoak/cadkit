@@ -20,6 +20,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   Matrix4,
+  OrthographicCamera,
   SphereGeometry,
   Vector3,
 } from "three";
@@ -45,8 +46,13 @@ import type {
 import type { MotionPlayer } from "./motion";
 import { transforms } from "./motionTransforms";
 import { displaySnapshot } from "./mechanics";
+import { SectionView } from "./SectionView";
+import type { SectionView as Drawing } from "./types";
 
 interface Props {
+  sectionView: Drawing | null;
+  onCloseSection: () => void;
+  onSectionPick: (id: string) => void;
   scene: Snapshot;
   theme: Theme;
   hidden: Set<string>;
@@ -96,7 +102,55 @@ export function Viewport(props: Props) {
     const viewer = instance.current;
     if (!viewer || !ready) return;
     props.api.current = {
+      focus(ids) {
+        const camera = viewer.camera.camera as OrthographicCamera;
+        if (!camera.isOrthographicCamera) return;
+        const components = latest.current.scene.components.filter((c) =>
+          ids.includes(c.id),
+        );
+        if (!components.length) return;
+        const box = new Box3();
+        components.forEach((c) =>
+          c.bounds.forEach((p) => box.expandByPoint(new Vector3(...p))),
+        );
+        const center = box.getCenter(new Vector3());
+        const projected = new Box3();
+        const inverse = camera.quaternion.clone().invert();
+        for (const x of [box.min.x, box.max.x])
+          for (const y of [box.min.y, box.max.y])
+            for (const z of [box.min.z, box.max.z])
+              projected.expandByPoint(
+                new Vector3(x, y, z).sub(center).applyQuaternion(inverse),
+              );
+        const size = projected.getSize(new Vector3());
+        const pose = viewer.getCameraLocationSettings();
+        const position = new Vector3(...pose.position)
+          .sub(new Vector3(...pose.target))
+          .add(center);
+        const zoom = Math.min(
+          10000,
+          Math.max(
+            0.001,
+            Math.min(
+              (camera.right - camera.left) / Math.max(size.x, 0.001),
+              (camera.top - camera.bottom) / Math.max(size.y, 0.001),
+            ) / 1.5,
+          ),
+        );
+        viewer.setCameraLocationSettings(
+          position.toArray(),
+          viewer.getCameraQuaternion(),
+          center.toArray(),
+          zoom,
+        );
+        viewer.update(true);
+      },
       camera(params = {}) {
+        if (!viewer.ready || instance.current !== viewer) {
+          if (Object.keys(params).length)
+            throw new Error("Viewport is loading");
+          return null;
+        }
         if (params.preset) viewer.presetCamera(params.preset);
         if (params.fit) {
           viewer.centerVisibleObjects();
@@ -629,6 +683,21 @@ export function Viewport(props: Props) {
       <div className="viewport-caption">
         ORTHOGRAPHIC <span> Z UP</span>
       </div>
+      {props.sectionView && (
+        <SectionView
+          key={JSON.stringify([
+            props.sectionView.revision,
+            props.sectionView.plane,
+            props.sectionView.mode,
+            props.sectionView.offset_mm,
+            props.sectionView.components.map((c) => c.id),
+          ])}
+          drawing={props.sectionView}
+          annotations={props.annotations}
+          onClose={props.onCloseSection}
+          onPick={props.onSectionPick}
+        />
+      )}
     </div>
   );
 }

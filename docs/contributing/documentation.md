@@ -60,8 +60,11 @@ The strict build rejects broken page links and unresolved object references.
 
 `agent-reference/` holds concise operational guidance for the agent skill.
 `scripts/sync_skill.py` assembles it into the standalone `skill/references/`
-directory. Human tutorials and generated API pages are not copied into the
-skill. After editing agent guidance, run:
+directory. Human tutorials, the desktop README and generated API pages are not
+copied into the skill. Keep the entrypoint focused on task routing, with each
+procedure or convention owned by one reference. Link to that owner instead of
+repeating it; load recovery and advanced geometry guidance only when relevant.
+After editing agent guidance, run:
 
 ```sh
 python scripts/sync_skill.py

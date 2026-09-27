@@ -91,14 +91,9 @@ names and hierarchy yield stable desktop paths. Renaming or reparenting creates
 new identities. Discover MCP IDs from the running app instead of storing them
 in source definitions.
 
-Use `name_pose("service", {...})` to supply named views to CLI
-`--view service`. The desktop shows the Project's selected pose and has no
-named-view selector; `assembly.pose(...).as_project()` selects a pose explicitly.
-The inspector's Motion controls preview revolute joints without changing the
-Project. They expose signed rpm, limits and coupling-aware playback; reset before
-measuring or rendering. Never rewrite Parts just to animate a viewer.
-Geometry, graph hardware and interfaces resolve from that pose. Visibility and
-explosion never alter manufacturing quantities.
+For named poses and transient motion preview, see
+[assemblies](declarative-assemblies.md#desktop-motion-preview). Visibility and
+explosion do not alter manufacturing quantities.
 
 ## Design inputs
 
@@ -168,23 +163,8 @@ when these references do not answer a question; record such documentation gaps.
 
 ## Mechanical contracts
 
-Assembly connections derive hardware, joints and fastenings from the same part
-features. Declare contact and clearance with `assembly.interface()`, and tool
-access with `assembly.access()` or `driver_access()`.
-
-A subsystem publishes selected leaf participants with
-`export_component("foot", foot_instance)`. Its parent uses
-`unit_instance.component("foot")` in `interface(left=..., right=...)`, alongside
-direct owned leaves or exports from another nested instance. Re-export a nested
-component reference to expose it through another level. References follow poses
-and remain scoped to the installed occurrence when a definition is reused.
-Only export the leaves callers need; use ports for placement. Optional interface
-regions remain in the declaring assembly's coordinates. See
-[assemblies](declarative-assemblies.md#contacts-across-subsystems).
-
-For static assemblies, `as_project(joints=..., interfaces=..., fastenings=...)`
-accepts additional installed contracts in project coordinates. These cannot be
-combined with motion edges; moving contracts belong on the graph so their
-geometry and metadata follow the same pose. `Project.joints`, `interfaces` and
-`fastenings` expose the compiled collections. See [mechanics](mechanics.md) for
-contract constructors, hardware, validation and app/MCP evidence.
+Connections derive hardware, joints and fastenings from part features. Use
+`assembly.interface()` for contact/clearance and `assembly.access()` or
+`driver_access()` for tool access. [Assemblies](declarative-assemblies.md) covers
+nested participant exports and graph declarations; [mechanics](mechanics.md)
+covers static contracts, hardware, validation and app/MCP evidence.

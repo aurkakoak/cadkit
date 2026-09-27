@@ -11,6 +11,18 @@ export interface RenderJob {
 import type { Shapes, decodeInstancedFormat } from "three-cad-viewer";
 export type Theme = "dark" | "light";
 export type Vector = [number, number, number];
+export interface SectionView {
+  revision: string;
+  mode: "section" | "projection";
+  plane: "XY" | "XZ" | "YZ";
+  offset_mm: number;
+  tolerance_mm: number;
+  axes: [string, string];
+  normal_axis: string;
+  bounds: [[number, number], [number, number]] | null;
+  components: { id: string; name: string; lines: [number, number][][] }[];
+  limitations: string;
+}
 export interface Annotation {
   id: string;
   text: string;
@@ -35,6 +47,7 @@ export interface CameraCommand {
 }
 export interface ViewportApi {
   camera(params?: CameraCommand): unknown;
+  focus(ids: string[]): void;
   rectangle(): { x: number; y: number; width: number; height: number };
 }
 export interface SlicerSettings {

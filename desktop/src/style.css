@@ -520,6 +520,84 @@ p {
   min-width: 0;
   background: var(--canvas);
 }
+.section-view {
+  position: absolute;
+  z-index: 6;
+  inset: 60px 18px 48px auto;
+  width: min(580px, calc(100% - 36px));
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px #0005;
+  overflow: hidden;
+}
+.section-view header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  font-size: 12px;
+}
+.section-view header span {
+  margin-right: auto;
+}
+.section-view button {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.section-view > svg {
+  width: 100%;
+  flex: 1;
+  min-height: 120px;
+  touch-action: none;
+  cursor: grab;
+}
+.section-view small {
+  padding: 8px 12px;
+  font-size: 10px;
+  opacity: 0.75;
+}
+.section-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 10px;
+  max-height: 80px;
+  overflow: auto;
+}
+.section-legend button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+.section-legend button[aria-pressed="true"] {
+  text-decoration: underline;
+}
+.section-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.section-notes {
+  max-height: 30%;
+  overflow: auto;
+  padding: 0 12px 8px;
+  font-size: 12px;
+}
+.section-notes > div {
+  border-left: 2px solid;
+  padding-left: 8px;
+}
+.section-empty {
+  margin: 8px 12px;
+  font-size: 12px;
+}
 .viewport {
   position: absolute;
   inset: 0;

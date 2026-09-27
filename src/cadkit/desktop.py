@@ -299,6 +299,15 @@ class Session:
             "shapes": visuals,
         }
 
+    def section_view(self, revision, ids, plane="XY", mode="section", offset=0, tolerance=0.05):
+        if revision != self.revision:
+            raise ValueError("This request belongs to an older build")
+        from .inspection import drawing
+        self.scene()
+        return {"revision": self.revision, **drawing(
+            self.models, {c["id"]: c for c in self.snapshot["components"]}, ids, plane=plane, mode=mode,
+            offset=offset, tolerance=tolerance)}
+
     def measure(self, revision, ids):
         if revision != self.revision:
             raise ValueError(
@@ -458,7 +467,7 @@ def main():
             try:
                 request = json.loads(line)
                 method = request["method"]
-                if method not in {"scene", "measure", "export_part", "export_parts", "mechanical_report", "render_assets"}:
+                if method not in {"scene", "measure", "section_view", "export_part", "export_parts", "mechanical_report", "render_assets"}:
                     raise ValueError(f"Unknown method: {method}")
                 if method == "scene":
                     # Keep the Python Session's expanded arrays for inspection;

@@ -12,7 +12,7 @@ python3 releases/cadkit-trial.1/install.py verify
 
 `skill/` is the maintained skill entrypoint and UI metadata. The builder packages
 it under `skills/cadkit`; `scripts/sync_skill.py` assembles `agent-reference/`
-and the desktop reference into `references/`. Run that sync before building.
+and its linked examples into `references/`. Run that sync before building.
 Install from the assembled release, so copied
 skills never depend on documentation outside their folder. Edit the agent sources
 and rebuild under a new label; do not hand-edit generated skill references.

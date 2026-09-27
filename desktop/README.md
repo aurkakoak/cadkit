@@ -172,6 +172,28 @@ and build. It does not launch another model or embed an agent. The connection
 survives app restarts; calls made while the app is closed return a useful error.
 One app owns each project-directory/project-reference pair.
 
+Source runtimes include a command client for hosts without registered tools:
+
+```sh
+node /path/to/cadkit/desktop/electron/mcp-client.mjs \
+  --project-dir /path/to/project --project my_package.project:PROJECT doctor
+```
+
+`doctor` checks live state and lists tools, returning a nonzero exit status for
+connection/build errors. `tools` lists schemas without requiring an open app;
+other commands take a tool name and optional JSON arguments. Use `--output FILE`
+to save JSON or a screenshot PNG (required for screenshots). The client uses the
+desktop's existing MCP SDK and does not invoke Python or sync packages.
+`cadkit doctor` separately reports the active Python executable, CadKit source,
+desktop tessellator availability and external tools. It does not probe the app.
+
+Connection errors need recovery: check the exact directory/reference, open that
+project using its launch command, wait for a successful build, then retry.
+For socket permission errors, use the host's permission mechanism; keep IPC
+private. Fix reported runtime/import failures using the project's documented
+environment. If user action is required, give the error and the exact launch,
+setting or permission step needed, rather than silently abandoning the live view.
+
 | Tool | Purpose |
 | --- | --- |
 | `get_state` | Project, Parts, assembly tree, component IDs, selection, visibility, camera, annotations and current measurement |
@@ -181,6 +203,8 @@ One app owns each project-directory/project-reference pair.
 | `highlight` | Coloured bounds independent of the user's selection |
 | `camera` | Preset orientation, fit visible objects, zoom, or restore an exact camera pose |
 | `measure` | Native solid clearance or labelled mesh approximation; optionally display it in the UI |
+| `section_view`, `clear_section_view` | Native 2D sections or wireframe projections in the app, with shared notes and component highlighting |
+| `present_review` | Upsert attached findings, highlight and optionally frame their participants, preserving selection and other notes |
 | `annotate`, `clear_annotations` | Markdown cards, markers and arrows attached to assembly items or placed in world/screen coordinates |
 | `screenshot` | PNG image content of the viewport or app window, including annotations |
 | `slicer_settings` | Current locally configured executable and profiles |
@@ -196,6 +220,44 @@ quaternion. `fit` frames currently visible objects; isolate a branch first to
 focus on it. `zoom` is absolute, not a multiplier.
 
 Example tool arguments, substituting the live revision and component IDs:
+
+Present a review directly on the model and assembly tree:
+
+```json
+{"revision":"…", "notes":[{"id":"review-bearing", "target":"/machine/bearing", "text":"**Clearance**\nMeasured 0.5 mm radial clearance. Verify print allowance."}], "focus":true}
+```
+
+`present_review` validates every target and the total note limit before changing
+the view. It updates only supplied note IDs; unrelated notes and selection stay
+intact. Focus reveals participants and frames their bounds without isolating the
+rest of the assembly. Use `focus:false` to preserve camera and visibility too.
+Review notes have the same session-only lifetime as `annotate` notes. Recheck
+numerical findings after a rebuild even when their target-attached cards survive.
+
+For an internal fit or hole alignment, generate a 2D section:
+
+```json
+{"revision":"…", "ids":["/machine/clamp", "/machine/shaft"], "mode":"section", "plane":"XZ", "offset":0, "tolerance":0.05, "show":true}
+```
+
+The plane uses installed world coordinates: XY shows X/Y at Z=`offset`, XZ shows
+X/Z at Y=`offset`, YZ shows Y/Z at X=`offset`. Units are millimetres. Assembly IDs
+expand to their components (up to 100). `mode:"projection"` projects native edges
+onto those axes, including hidden edges; its offset has no geometric effect.
+Sections use native plane intersections, then sample curves at the requested
+deflection. They are review geometry, not exact drawing exports or proof of fit.
+Use `measure` and mechanical checks for engineering conclusions. Mesh-backed
+components are rejected explicitly. Restore the installed pose before calling.
+
+The tool returns component-labelled polylines and bounds. `show:true` opens a 2D
+view with pan, zoom, a component legend and the relevant attached notes; legend
+buttons highlight participants in 3D. A missed cut shows **No intersection**.
+`show:false` obtains geometry without changing the view. `get_state` includes a
+compact drawing summary; screenshots include the visible 2D view. Closing it or
+calling `clear_section_view` preserves notes and the 3D view. Rebuilds clear it
+so an obsolete section cannot be mistaken for the current model.
+
+For a dimension between installed components:
 
 ```json
 {"revision":"…", "ids":["/machine/frame/left", "/machine/frame/right"], "show":true}

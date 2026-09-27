@@ -193,11 +193,14 @@ def test_skill_stays_self_contained_without_copying_human_autodoc_pages(document
     write(tmp_path, "agent-reference/tasks/model.md", "# Follow the active project\n")
     write(tmp_path, "agent-reference/install.md", "# Agent installation instructions\n")
     write(tmp_path, "agent-reference/mechanics.md", "# Agent mechanical checks\n")
-    write(tmp_path, "desktop/README.md", (
-        "# Desktop\n"
-        "[Install](../docs/how-to/install.md)\n"
-        "[Mechanics](../docs/reference/mechanics.md)\n"
+    write(tmp_path, "agent-reference/desktop.md", (
+        "# Agent desktop controls\n"
+        "[Install](install.md)\n"
+        "[Mechanics](mechanics.md)\n"
+        "[Human installation](../docs/how-to/install.md)\n"
+        "[Human mechanics](../docs/reference/mechanics.md)\n"
     ))
+    write(tmp_path, "desktop/README.md", "# Human desktop walkthrough\n")
     write(tmp_path, "examples/tutorial/01_box.py", "def box(): return 1\n")
     write(tmp_path, "docs/reference/project.md", "# API\n\n::: cadkit.Project\n")
     write(tmp_path, "docs/how-to/install.md", "# Human installation tutorial\n")
@@ -213,6 +216,9 @@ def test_skill_stays_self_contained_without_copying_human_autodoc_pages(document
     assert b"https://aurkakoak.github.io/cadkit/docs/reference/project/#cadkit.Project" in relative["agent-guide.md"]
     assert b"[Install](install.md)" in relative["desktop.md"]
     assert b"[Mechanics](mechanics.md)" in relative["desktop.md"]
+    assert b"https://aurkakoak.github.io/cadkit/docs/how-to/install/" in relative["desktop.md"]
+    assert b"https://aurkakoak.github.io/cadkit/docs/reference/mechanics/" in relative["desktop.md"]
+    assert not any(b"Human desktop walkthrough" in content for content in relative.values())
     assert not any(b"::: cadkit.Project" in content for content in relative.values())
     for source, content in generated.items():
         if source.suffix != ".md":

@@ -77,6 +77,7 @@ import type {
   Theme,
   TreeNode,
   Annotation,
+  SectionView,
   ViewportApi,
   ConnectionKind,
   ConnectionSelection,
@@ -311,6 +312,7 @@ function ProjectWorkbench({
   const [notice, setNotice] = useState("");
   const [exporting, setExporting] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [sectionView, setSectionView] = useState<SectionView | null>(null);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
     null,
   );
@@ -371,6 +373,7 @@ function ProjectWorkbench({
     setSelected((before) => before.filter((id) => ids.has(id)));
     setMeasurement(null);
     const nextNodes = annotationNodes(next.tree);
+    setSectionView(null);
     const canFollow = (a: Annotation) =>
       Boolean(a.target && nextNodes.has(a.target) && !a.point && !a.from);
     setAnnotations((before) => before.filter(canFollow));
@@ -668,6 +671,15 @@ function ProjectWorkbench({
       : null,
     highlights,
     annotations,
+    sectionView: sectionView
+      ? {
+          ...sectionView,
+          components: sectionView.components.map(({ lines, ...c }) => ({
+            ...c,
+            curves: lines.length,
+          })),
+        }
+      : null,
     measurement,
     measuring,
     measureError,
@@ -826,6 +838,49 @@ function ProjectWorkbench({
         setMeasurement(params);
         dispatchVisibility({ type: "show", ids: params.ids });
       });
+    } else if (method === "show_section_view") {
+      if (previewActive)
+        throw new Error(
+          "Return to the installed pose before showing a 2D view",
+        );
+      flushSync(() => setSectionView(params));
+    } else if (method === "clear_section_view") {
+      flushSync(() => setSectionView(null));
+    } else if (method === "present_review") {
+      const ids = expand(params.notes.map((n: Annotation) => n.target!));
+      const noteIds = new Set(params.notes.map((n: Annotation) => n.id));
+      if (
+        annotations.filter((a) => !noteIds.has(a.id)).length +
+          params.notes.length >
+        100
+      )
+        throw new Error("Limit of 100 annotations; clear some first");
+      if (params.focus && !viewportApi.current?.camera())
+        throw new Error("Viewport is loading");
+      if (previewActive)
+        throw new Error(
+          "Return to the installed pose before presenting attached notes",
+        );
+      flushSync(() => {
+        setAnnotations((before) => [
+          ...before.filter((a) => !noteIds.has(a.id)),
+          ...params.notes.map((n: Annotation) => ({ ...n, space: "world" })),
+        ]);
+        setHighlights({ ids, color: params.notes[0].color });
+        setNoteRows(
+          (before) =>
+            new Set([
+              ...before,
+              ...params.notes.map((n: Annotation) => n.target!),
+            ]),
+        );
+        if (params.focus) {
+          // Reveal within the existing visibility context; unlike isolate, this is not a toggle.
+          dispatchVisibility({ type: "show", ids });
+          setHardwareView((before) => ({ ...before, mode: "all" }));
+        }
+      });
+      if (params.focus) viewportApi.current?.focus(ids);
     } else if (method === "annotate") {
       if (
         annotations.length >= 100 &&
@@ -1373,6 +1428,11 @@ function ProjectWorkbench({
               }
             >
               <Viewport
+                sectionView={previewActive ? null : sectionView}
+                onCloseSection={() => setSectionView(null)}
+                onSectionPick={(id) =>
+                  setHighlights({ ids: [id], color: "#f1c789" })
+                }
                 scene={scene}
                 theme={theme}
                 hidden={hidden}

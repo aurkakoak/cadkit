@@ -1,16 +1,7 @@
 # Assemblies and motion
 
-`cadkit` composes local native or explicit mesh geometry. A `Part`
-owns a local body builder, manufacturing process, named features and named `Frame`
-ports. `Purchased` supplies the same geometry/port contract with supplier metadata
-and a quantity; it is excluded from printable parts. An `Assembly` owns instances
-of either definition, or instances of other assemblies.
-
-`assembly.add(definition)` uses the definition's name. Supply an explicit alias
-for a repeated occurrence, such as `add("left", unit)`. An omitted display group
-inherits a manufactured Part's group; an explicit instance group changes display
-only. Nested leaves retain their groups when the containing instance has no
-override.
+An Assembly owns instances of Parts, Purchased definitions or other assemblies.
+[API](api.md) covers definition fields, aliases, display groups and inventory.
 
 ## Placement and motion
 
@@ -159,7 +150,9 @@ its usual limitations.
 ## One graph for the desktop and exports
 
 `as_project()` takes a recursive snapshot for the CadKit desktop, CLI,
-validation and export APIs. Named poses become views. Geometry, generated hardware,
+validation and export APIs. Named poses become CLI `--view` choices; the desktop displays the Project's
+selected pose (`assembly.pose(...).as_project()`) without a named-view selector.
+Geometry, generated hardware,
 joints, contact regions and access envelopes resolve from the same selected pose.
 Later edits to the source graph cannot alter an existing snapshot.
 
@@ -175,28 +168,11 @@ Later edits to the source graph cannot alter an existing snapshot.
 - `describe()` exposes the definitions, datums, features and relationships without
   building the part bodies.
 
-Compose a subsystem by adding its Assembly definition to the parent. Publish
-attachment datums with `export_port`, and use the returned instance's `port()`
-for outer connections. Use `export_component` and `component()` for contacts
-between subsystems. Compile the containing graph with `as_project()` so
-hardware and mechanical paths have the correct root and nested identity.
-
-The compiled manufacturing inventory counts installed Parts independently of
-poses and visibility. `extra_parts=(COUPON,)` adds uninstalled definitions;
-`quantities={"bracket": 6}` selects an explicit manufacturing total. Definition
-groups control manufacturing folders; instance groups control display and
-inherit manufactured Part groups when omitted.
-
 ## Desktop motion preview
 
 The inspector's **Motion** controls adjust revolute angles in degrees and slider
 positions in millimetres. Independent joints play at signed rpm or mm/s
 respectively. Coupled joints follow their drivers; playback stops at limits.
-The framework supplies `Assembly.motion_graph()` and directed parent/child metadata,
-so clients do not infer moving parts from names or edit geometry. Its column-major
-millimetre matrices transform installed display meshes; nested descendants and
-receiver-owned hardware follow the graph. No Part builders run during playback.
-
 Preview is transient and resets on rebuild. Measurements and Blender rendering
 require reset; running checks restores the installed pose. Extra fastening
 constraints can disable preview. Motion playback is not physical validation.
@@ -214,7 +190,6 @@ form remains supported for choices that belong on the root.
 
 `VARIANTS.project(base="hybrid")`, CLI `--variant base=hybrid`, and desktop MCP
 `set_variants` select a coherent project snapshot. Use the returned new revision.
-Cached workers/scenes are bounded; idle warming fills free slots after the first
-viewport paint. Source edits invalidate all configurations. Declare non-Python
+Source edits invalidate all configurations. Declare non-Python
 inputs in `Variants(..., dependencies=(... ,))`; paths are relative to the desktop
 project directory or absolute. Exports record the active selection.
